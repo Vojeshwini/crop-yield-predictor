@@ -4,12 +4,11 @@ import pandas as pd
 import requests
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
+from matplotlib.backends.backend_pdf import PdfPages
+import io
 import warnings
 warnings.filterwarnings("ignore")
 
-# ─────────────────────────────────────────────────────
-# PAGE CONFIG
-# ─────────────────────────────────────────────────────
 st.set_page_config(
     page_title="CropAI — Smart Yield Predictor",
     page_icon="🌾",
@@ -18,281 +17,290 @@ st.set_page_config(
 )
 
 # ─────────────────────────────────────────────────────
-# CUSTOM CSS — Beautiful UI
+# LIGHT THEME HIGH CONTRAST CSS
 # ─────────────────────────────────────────────────────
 st.markdown("""
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=DM+Sans:wght@300;400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&family=Merriweather:wght@700;900&display=swap');
 
-/* ── Global Reset ── */
 * { box-sizing: border-box; }
 
+/* LIGHT BACKGROUND — high contrast */
 html, body, [class*="css"] {
-    font-family: 'DM Sans', sans-serif;
-    background-color: #0f1a0f;
-    color: #e8f0e8;
+    font-family: 'Nunito', sans-serif !important;
+    background-color: #f0f7f0 !important;
+    color: #1a2e1a !important;
 }
 
-/* ── Hide Streamlit Branding ── */
 #MainMenu, footer, header { visibility: hidden; }
 
-/* ── Main Background ── */
 .stApp {
-    background: linear-gradient(135deg, #0f1a0f 0%, #1a2f1a 50%, #0f1a0f 100%);
-    min-height: 100vh;
+    background: #f0f7f0 !important;
 }
 
-/* ── Hero Title ── */
-.hero-title {
-    font-family: 'Playfair Display', serif;
-    font-size: 3.2rem;
-    font-weight: 900;
-    background: linear-gradient(135deg, #7bc67e 0%, #4caf50 50%, #a5d6a7 100%);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
-    line-height: 1.1;
-    margin-bottom: 0.3rem;
-}
-
-.hero-subtitle {
-    font-family: 'DM Sans', sans-serif;
-    font-size: 1.1rem;
-    font-weight: 300;
-    color: #81c784;
-    letter-spacing: 0.15em;
-    text-transform: uppercase;
+/* ── Hero Banner ── */
+.hero-wrap {
+    background: linear-gradient(135deg, #1b5e20 0%, #2e7d32 50%, #388e3c 100%);
+    border-radius: 20px;
+    padding: 2.5rem 2rem;
     margin-bottom: 2rem;
+    box-shadow: 0 8px 30px rgba(27,94,32,0.25);
 }
-
-/* ── Cards ── */
-.card {
-    background: rgba(255,255,255,0.04);
-    border: 1px solid rgba(76, 175, 80, 0.2);
-    border-radius: 16px;
-    padding: 1.5rem;
-    margin-bottom: 1rem;
-    backdrop-filter: blur(10px);
-}
-
-.card-green {
-    background: linear-gradient(135deg, rgba(76,175,80,0.15) 0%, rgba(46,125,50,0.1) 100%);
-    border: 1px solid rgba(76, 175, 80, 0.3);
-    border-radius: 16px;
-    padding: 1.5rem;
-    margin-bottom: 1rem;
-}
-
-/* ── Section Headers ── */
-.section-header {
-    font-family: 'Playfair Display', serif;
-    font-size: 1.4rem;
-    font-weight: 700;
-    color: #a5d6a7;
-    border-left: 4px solid #4caf50;
-    padding-left: 0.8rem;
-    margin: 1.5rem 0 1rem 0;
-}
-
-/* ── Metric Cards ── */
-.metric-card {
-    background: rgba(76, 175, 80, 0.08);
-    border: 1px solid rgba(76, 175, 80, 0.25);
-    border-radius: 12px;
-    padding: 1rem 1.2rem;
-    text-align: center;
-    transition: all 0.3s ease;
-}
-
-.metric-label {
-    font-size: 0.75rem;
-    font-weight: 500;
-    color: #81c784;
-    text-transform: uppercase;
-    letter-spacing: 0.1em;
+.hero-title {
+    font-family: 'Merriweather', serif;
+    font-size: 2.8rem;
+    font-weight: 900;
+    color: #ffffff;
     margin-bottom: 0.4rem;
 }
-
-.metric-value {
-    font-family: 'Playfair Display', serif;
-    font-size: 1.8rem;
+.hero-sub {
+    font-size: 1rem;
+    color: #c8e6c9;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+}
+.badge {
+    display: inline-block;
+    background: rgba(255,255,255,0.2);
+    border: 1px solid rgba(255,255,255,0.35);
+    border-radius: 20px;
+    padding: 0.3rem 0.9rem;
+    font-size: 0.8rem;
+    color: #ffffff;
     font-weight: 700;
-    color: #e8f5e9;
+    margin: 0.3rem 0.2rem 0 0;
 }
 
-.metric-unit {
-    font-size: 0.8rem;
-    color: #66bb6a;
-    margin-top: 0.2rem;
+/* ── Section Header ── */
+.sec-header {
+    font-family: 'Merriweather', serif;
+    font-size: 1.25rem;
+    font-weight: 900;
+    color: #1b5e20;
+    border-left: 6px solid #4caf50;
+    padding: 0.7rem 1rem;
+    background: #e8f5e9;
+    border-radius: 0 12px 12px 0;
+    margin: 2rem 0 1rem 0;
+}
+
+/* ── Input Labels — DARK AND BOLD ── */
+.stTextInput label,
+.stSelectbox label {
+    color: #1b5e20 !important;
+    font-size: 0.9rem !important;
+    font-weight: 800 !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.08em !important;
+}
+
+/* ── Input Fields — WHITE BACKGROUND ── */
+.stTextInput input {
+    background: #ffffff !important;
+    border: 2.5px solid #4caf50 !important;
+    border-radius: 10px !important;
+    color: #1a2e1a !important;
+    font-size: 1rem !important;
+    font-weight: 700 !important;
+}
+.stTextInput input::placeholder {
+    color: #9e9e9e !important;
+    font-weight: 400 !important;
+}
+
+/* ── Selectbox — WHITE BACKGROUND ── */
+.stSelectbox > div > div {
+    background: #ffffff !important;
+    border: 2.5px solid #4caf50 !important;
+    border-radius: 10px !important;
+    color: #1a2e1a !important;
+    font-weight: 700 !important;
+}
+
+/* ── Button ── */
+.stButton > button {
+    background: linear-gradient(135deg, #2e7d32, #43a047) !important;
+    color: #ffffff !important;
+    border: none !important;
+    border-radius: 14px !important;
+    font-size: 1.15rem !important;
+    font-weight: 800 !important;
+    padding: 0.85rem 2rem !important;
+    box-shadow: 0 4px 20px rgba(46,125,50,0.35) !important;
+}
+
+/* ── Download Button ── */
+.stDownloadButton > button {
+    background: linear-gradient(135deg, #1565c0, #1976d2) !important;
+    color: #ffffff !important;
+    border: none !important;
+    border-radius: 14px !important;
+    font-size: 1.1rem !important;
+    font-weight: 800 !important;
+    padding: 0.85rem 2rem !important;
+    box-shadow: 0 4px 20px rgba(21,101,192,0.3) !important;
+}
+
+/* ── Metric Containers — WHITE CARDS ── */
+[data-testid="metric-container"] {
+    background: #ffffff !important;
+    border: 2px solid #a5d6a7 !important;
+    border-radius: 14px !important;
+    padding: 1rem !important;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.07) !important;
+}
+[data-testid="metric-container"] label {
+    color: #2e7d32 !important;
+    font-size: 0.78rem !important;
+    font-weight: 800 !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.08em !important;
+}
+[data-testid="stMetricValue"] {
+    color: #1b5e20 !important;
+    font-family: 'Merriweather', serif !important;
+    font-size: 1.6rem !important;
+    font-weight: 900 !important;
 }
 
 /* ── Result Banner ── */
 .result-banner {
     background: linear-gradient(135deg, #1b5e20, #2e7d32, #388e3c);
-    border: 1px solid #4caf50;
     border-radius: 20px;
-    padding: 2rem;
+    padding: 2.5rem 2rem;
     text-align: center;
-    margin: 1.5rem 0;
-}
-
-.result-yield {
-    font-family: 'Playfair Display', serif;
-    font-size: 3.5rem;
-    font-weight: 900;
+    box-shadow: 0 8px 30px rgba(27,94,32,0.3);
+    margin: 1rem 0;
     color: #ffffff;
 }
-
-.result-label {
-    font-size: 0.9rem;
+.result-number {
+    font-family: 'Merriweather', serif;
+    font-size: 4.5rem;
+    font-weight: 900;
+    color: #ffffff;
+    line-height: 1;
+}
+.result-unit {
+    font-size: 1.5rem;
+    color: #c8e6c9;
+    font-weight: 700;
+}
+.result-sub {
+    font-size: 0.85rem;
     color: #a5d6a7;
     text-transform: uppercase;
-    letter-spacing: 0.2em;
-}
-
-/* ── Recommendation Cards ── */
-.rec-card {
-    border-radius: 14px;
-    padding: 1.2rem;
-    margin-bottom: 0.8rem;
-    border-left: 5px solid;
-}
-
-.rec-optimal {
-    background: rgba(46, 125, 50, 0.2);
-    border-color: #4caf50;
-}
-
-.rec-warning {
-    background: rgba(245, 124, 0, 0.15);
-    border-color: #ff9800;
-}
-
-.rec-danger {
-    background: rgba(198, 40, 40, 0.15);
-    border-color: #f44336;
-}
-
-.rec-title {
-    font-family: 'Playfair Display', serif;
-    font-size: 1rem;
-    font-weight: 700;
+    letter-spacing: 0.18em;
     margin-bottom: 0.5rem;
 }
 
-.rec-item {
-    font-size: 0.9rem;
-    color: #c8e6c9;
-    padding: 0.2rem 0;
-}
-
-/* ── XAI Badge ── */
-.xai-badge {
-    display: inline-block;
-    background: linear-gradient(135deg, #1a237e, #283593);
-    border: 1px solid #5c6bc0;
-    border-radius: 20px;
-    padding: 0.3rem 0.8rem;
-    font-size: 0.75rem;
+/* ── Info Card ── */
+.info-card {
+    background: #ffffff;
+    border: 2px solid #c8e6c9;
+    border-radius: 14px;
+    padding: 1.2rem 1.4rem;
+    margin-bottom: 1rem;
+    color: #1a2e1a;
+    font-size: 0.95rem;
     font-weight: 600;
-    color: #9fa8da;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+}
+.info-card-title {
+    font-size: 0.75rem;
+    color: #2e7d32;
     text-transform: uppercase;
     letter-spacing: 0.1em;
-    margin-bottom: 0.8rem;
+    font-weight: 800;
+    margin-bottom: 0.6rem;
+}
+
+/* ── Recommendation Cards ── */
+.rec-optimal {
+    background: #f1f8e9;
+    border: 2px solid #aed581;
+    border-left: 6px solid #4caf50;
+    border-radius: 12px;
+    padding: 1rem 1.2rem;
+    color: #1b5e20;
+}
+.rec-warn {
+    background: #fff8e1;
+    border: 2px solid #ffe082;
+    border-left: 6px solid #ff9800;
+    border-radius: 12px;
+    padding: 1rem 1.2rem;
+    color: #e65100;
+}
+.rec-danger {
+    background: #fce4ec;
+    border: 2px solid #f48fb1;
+    border-left: 6px solid #e53935;
+    border-radius: 12px;
+    padding: 1rem 1.2rem;
+    color: #b71c1c;
+}
+.rec-title {
+    font-size: 1rem;
+    font-weight: 800;
+    margin-bottom: 0.5rem;
+}
+.rec-item {
+    font-size: 0.9rem;
+    font-weight: 600;
+    padding: 0.15rem 0;
 }
 
 /* ── Divider ── */
-.fancy-divider {
-    height: 1px;
+.divider {
+    height: 3px;
     background: linear-gradient(90deg, transparent, #4caf50, transparent);
     margin: 2rem 0;
+    border-radius: 2px;
 }
 
-/* ── Sidebar ── */
+/* ── Sidebar — DARK GREEN ── */
 section[data-testid="stSidebar"] {
-    background: linear-gradient(180deg, #0a150a 0%, #162016 100%);
-    border-right: 1px solid rgba(76, 175, 80, 0.2);
+    background: linear-gradient(180deg, #1b5e20 0%, #2e7d32 100%) !important;
 }
-
-section[data-testid="stSidebar"] .stSelectbox label,
 section[data-testid="stSidebar"] p,
-section[data-testid="stSidebar"] h1,
-section[data-testid="stSidebar"] h2,
-section[data-testid="stSidebar"] h3 {
-    color: #a5d6a7 !important;
+section[data-testid="stSidebar"] span,
+section[data-testid="stSidebar"] div,
+section[data-testid="stSidebar"] label {
+    color: #ffffff !important;
+}
+section[data-testid="stSidebar"] [data-testid="metric-container"] {
+    background: rgba(255,255,255,0.15) !important;
+    border: 1px solid rgba(255,255,255,0.3) !important;
+}
+section[data-testid="stSidebar"] [data-testid="stMetricValue"] {
+    color: #ffffff !important;
+    font-size: 1.3rem !important;
+}
+section[data-testid="stSidebar"] .stSelectbox > div > div {
+    background: rgba(255,255,255,0.2) !important;
+    border: 1px solid rgba(255,255,255,0.35) !important;
+    color: #ffffff !important;
 }
 
-/* ── Input Fields ── */
-.stTextInput input, .stSelectbox select {
-    background: rgba(255,255,255,0.05) !important;
-    border: 1px solid rgba(76, 175, 80, 0.3) !important;
-    border-radius: 10px !important;
-    color: #e8f5e9 !important;
-    font-family: 'DM Sans', sans-serif !important;
-}
-
-.stTextInput label, .stSelectbox label {
-    color: #81c784 !important;
-    font-weight: 500 !important;
-    font-size: 0.85rem !important;
-    text-transform: uppercase !important;
-    letter-spacing: 0.08em !important;
-}
-
-/* ── Button ── */
-.stButton button {
-    background: linear-gradient(135deg, #2e7d32, #388e3c, #43a047) !important;
-    color: white !important;
-    border: none !important;
+/* ── Success/Warning/Error boxes ── */
+div[data-testid="stAlert"] {
     border-radius: 12px !important;
-    padding: 0.8rem 2rem !important;
-    font-family: 'DM Sans', sans-serif !important;
-    font-size: 1rem !important;
-    font-weight: 600 !important;
-    letter-spacing: 0.05em !important;
-    transition: all 0.3s ease !important;
-    box-shadow: 0 4px 15px rgba(76, 175, 80, 0.3) !important;
-}
-
-.stButton button:hover {
-    transform: translateY(-2px) !important;
-    box-shadow: 0 8px 25px rgba(76, 175, 80, 0.4) !important;
-}
-
-/* ── Spinner ── */
-.stSpinner {
-    color: #4caf50 !important;
-}
-
-/* ── Metrics ── */
-[data-testid="metric-container"] {
-    background: rgba(76, 175, 80, 0.08);
-    border: 1px solid rgba(76, 175, 80, 0.2);
-    border-radius: 12px;
-    padding: 1rem;
-}
-
-[data-testid="metric-container"] label {
-    color: #81c784 !important;
-    font-size: 0.8rem !important;
-    text-transform: uppercase !important;
-    letter-spacing: 0.08em !important;
-}
-
-[data-testid="metric-container"] [data-testid="stMetricValue"] {
-    color: #e8f5e9 !important;
-    font-family: 'Playfair Display', serif !important;
-    font-size: 1.6rem !important;
+    font-weight: 700 !important;
+    font-size: 0.95rem !important;
 }
 
 /* ── Footer ── */
 .footer {
     text-align: center;
-    padding: 2rem;
-    color: #4caf50;
-    font-size: 0.8rem;
-    letter-spacing: 0.1em;
-    opacity: 0.7;
+    padding: 1.5rem;
+    color: #2e7d32;
+    font-size: 0.85rem;
+    font-weight: 700;
+    border-top: 3px solid #c8e6c9;
+    margin-top: 2rem;
+    background: #e8f5e9;
+    border-radius: 12px;
 }
 </style>
 """, unsafe_allow_html=True)
@@ -316,9 +324,7 @@ def load_models():
         'average_rain_fall_mm_per_year': 'rainfall',
         'pesticides_tonnes': 'pesticides',
         'avg_temp': 'temperature',
-        'Item': 'crop',
-        'Area': 'country',
-        'Year': 'year'
+        'Item': 'crop', 'Area': 'country', 'Year': 'year'
     })
     df = df.dropna()
 
@@ -330,7 +336,6 @@ def load_models():
     X = df[['crop_encoded', 'country_encoded', 'year',
             'rainfall', 'pesticides', 'temperature']]
     y = df['yield']
-
     X_train, X_test, y_train, y_test = train_test_split(
         X, y, test_size=0.2, random_state=42)
 
@@ -339,30 +344,27 @@ def load_models():
     rf.fit(X_train, y_train)
 
     explainer = shap.TreeExplainer(rf)
-
     lime_explainer = lime.lime_tabular.LimeTabularExplainer(
         training_data=np.array(X_train),
         feature_names=['Crop Type', 'Country', 'Year',
                       'Rainfall', 'Pesticides', 'Temperature'],
-        mode='regression',
-        random_state=42
-    )
+        mode='regression', random_state=42)
 
-    return rf, le_crop, le_country, explainer, lime_explainer, np.array(X_train)
+    return rf, le_crop, le_country, explainer, lime_explainer
 
 # ─────────────────────────────────────────────────────
-# API FUNCTIONS
+# HELPER FUNCTIONS
 # ─────────────────────────────────────────────────────
 def get_weather(city_name):
     try:
-        geo_response = requests.get(
+        geo = requests.get(
             "https://geocoding-api.open-meteo.com/v1/search",
             params={"name": city_name, "count": 1}, timeout=10).json()
-        if "results" not in geo_response:
+        if "results" not in geo:
             return None
-        location = geo_response["results"][0]
-        lat, lon = location["latitude"], location["longitude"]
-        country = location.get("country", "Unknown")
+        loc = geo["results"][0]
+        lat, lon = loc["latitude"], loc["longitude"]
+        country = loc.get("country", "Unknown")
         wr = requests.get(
             "https://api.open-meteo.com/v1/forecast",
             params={
@@ -371,14 +373,14 @@ def get_weather(city_name):
                          "precipitation_sum", "relative_humidity_2m_max"],
                 "timezone": "Asia/Kolkata", "forecast_days": 1
             }, timeout=10).json()
-        daily = wr["daily"]
-        temp = (daily["temperature_2m_max"][0] + daily["temperature_2m_min"][0]) / 2
+        d = wr["daily"]
+        temp = (d["temperature_2m_max"][0] + d["temperature_2m_min"][0]) / 2
         return {
             "city": city_name, "country": country,
             "latitude": lat, "longitude": lon,
             "temperature": temp,
-            "rainfall": daily["precipitation_sum"][0],
-            "humidity": daily["relative_humidity_2m_max"][0]
+            "rainfall": d["precipitation_sum"][0],
+            "humidity": d["relative_humidity_2m_max"][0]
         }
     except:
         return None
@@ -393,182 +395,326 @@ def get_soil(lat):
     else:
         return {"nitrogen": 1.0, "ph": 6.5, "organic_carbon": 7.0, "region": "Coastal India"}
 
+def generate_pdf(city, crop, year, weather, soil,
+                 predicted_tons, shap_vals, feature_names, lime_exp):
+    buf = io.BytesIO()
+    with PdfPages(buf) as pdf:
+
+        # PAGE 1 — Summary
+        fig, ax = plt.subplots(figsize=(11.69, 8.27))
+        fig.patch.set_facecolor('#f1f8e9')
+        ax.set_facecolor('#f1f8e9')
+        ax.axis('off')
+
+        # Header bar
+        ax.add_patch(plt.Rectangle((0, 0.88), 1, 0.12,
+            transform=ax.transAxes, facecolor='#1b5e20', clip_on=False))
+        ax.text(0.5, 0.945, '🌾  CropAI — Crop Yield Prediction Report',
+               ha='center', va='center', fontsize=16,
+               fontweight='bold', color='white', transform=ax.transAxes)
+        ax.text(0.5, 0.895, f'Location: {city}   |   Crop: {crop}   |   Year: {year}',
+               ha='center', va='center', fontsize=10,
+               color='#a5d6a7', transform=ax.transAxes)
+
+        # Yield box
+        ax.add_patch(mpatches.FancyBboxPatch((0.3, 0.68), 0.4, 0.16,
+            boxstyle="round,pad=0.02", facecolor='#2e7d32',
+            transform=ax.transAxes))
+        ax.text(0.5, 0.77, f'{predicted_tons:.2f} tons/ha',
+               ha='center', va='center', fontsize=22,
+               fontweight='bold', color='white', transform=ax.transAxes)
+        ax.text(0.5, 0.695, 'PREDICTED YIELD',
+               ha='center', va='center', fontsize=9,
+               color='#c8e6c9', transform=ax.transAxes)
+
+        # Data boxes
+        for i, (title, values) in enumerate([
+            ('LIVE WEATHER DATA', [
+                f"Temperature: {weather['temperature']:.1f}°C",
+                f"Rainfall: {weather['rainfall']:.1f} mm",
+                f"Humidity: {weather['humidity']:.0f}%"]),
+            ('SOIL HEALTH DATA', [
+                f"Nitrogen: {soil['nitrogen']} g/kg",
+                f"Soil pH: {soil['ph']}",
+                f"Region: {soil['region']}"])
+        ]):
+            x = 0.03 + i * 0.5
+            ax.text(x, 0.65, title, fontsize=8,
+                   fontweight='bold', color='#2e7d32',
+                   transform=ax.transAxes)
+            ax.add_patch(mpatches.FancyBboxPatch(
+                (x, 0.52), 0.44, 0.11,
+                boxstyle="round,pad=0.01",
+                facecolor='white', edgecolor='#c8e6c9',
+                transform=ax.transAxes))
+            for j, v in enumerate(values):
+                ax.text(x+0.02, 0.61 - j*0.035, f"• {v}",
+                       fontsize=10, color='#1b5e20',
+                       transform=ax.transAxes)
+
+        # Model info
+        ax.text(0.03, 0.50, 'MODEL INFORMATION', fontsize=8,
+               fontweight='bold', color='#2e7d32',
+               transform=ax.transAxes)
+        ax.text(0.03, 0.47,
+               'Algorithm: Random Forest Regressor   |   '
+               'Accuracy: R² = 0.9857   |   RMSE: 10,189 hg/ha',
+               fontsize=10, color='#1b5e20',
+               transform=ax.transAxes)
+
+        # Recommendations
+        ax.text(0.03, 0.43, 'SMART RECOMMENDATIONS', fontsize=8,
+               fontweight='bold', color='#2e7d32',
+               transform=ax.transAxes)
+        t = weather['temperature']
+        recs = [
+            f"🌡️  Temperature ({t:.1f}°C): " + (
+                "Optimal — Good planting conditions" if 15<=t<=30
+                else "Too Hot — Use shade nets & irrigate more" if t>30
+                else "Too Cold — Delay planting & protect seedlings"),
+            f"🌧️  Irrigation ({weather['rainfall']:.1f}mm): " + (
+                "Low Rainfall — Irrigate 2x/week, use drip irrigation"
+                if weather['rainfall']<2
+                else "Adequate — Monitor drainage, normal schedule"),
+            f"🌿  Fertilizer (pH {soil['ph']}): " + (
+                "Acidic — Add lime 2-3 bags/acre" if soil['ph']<6
+                else "Alkaline — Add sulfur" if soil['ph']>7.5
+                else "Optimal — Apply urea 25kg/acre, balanced NPK"),
+            f"🐛  Pest Risk: " + (
+                "HIGH — Spray neem oil weekly, set traps"
+                if t>28 and weather['humidity']>70
+                else "MEDIUM — Weekly monitoring & preventive spray"
+                if t>25 else "LOW — Monthly inspection, standard monitoring")
+        ]
+        for i, rec in enumerate(recs):
+            ax.text(0.03, 0.40 - i*0.05, rec,
+                   fontsize=9, color='#1b5e20',
+                   transform=ax.transAxes)
+
+        ax.text(0.5, 0.01,
+               'CropAI  |  Random Forest + SHAP + LIME  |  IEEE Research Project',
+               ha='center', fontsize=8, color='#666666',
+               transform=ax.transAxes)
+
+        pdf.savefig(fig, bbox_inches='tight')
+        plt.close()
+
+        # PAGE 2 — SHAP
+        fig2, ax2 = plt.subplots(figsize=(11.69, 8.27))
+        fig2.patch.set_facecolor('#f9fbe7')
+        ax2.set_facecolor('#f9fbe7')
+        colors = ['#43a047' if v > 0 else '#e53935'
+                 for v in shap_vals[0]]
+        bars = ax2.barh(feature_names, shap_vals[0],
+                       color=colors, alpha=0.9,
+                       edgecolor='white', height=0.55)
+        ax2.axvline(x=0, color='#333', linewidth=2, alpha=0.4)
+        ax2.set_xlabel('SHAP Value — Impact on Yield (hg/ha)',
+                      fontsize=12, color='#1b5e20', fontweight='bold')
+        ax2.set_title(
+            'XAI Explanation: SHAP Feature Importance\n'
+            'Green = Increases Yield   |   Red = Decreases Yield',
+            fontsize=14, fontweight='bold', color='#1b5e20', pad=15)
+        ax2.tick_params(colors='#1b5e20', labelsize=12)
+        for spine in ['bottom','left']:
+            ax2.spines[spine].set_color('#a5d6a7')
+            ax2.spines[spine].set_linewidth(2)
+        ax2.spines['top'].set_visible(False)
+        ax2.spines['right'].set_visible(False)
+        for bar, val in zip(bars, shap_vals[0]):
+            label = f"+{val:.0f}" if val > 0 else f"{val:.0f}"
+            ax2.text(val, bar.get_y() + bar.get_height()/2,
+                    f"  {label}  ", va='center',
+                    ha='left' if val >= 0 else 'right',
+                    fontsize=11, fontweight='bold', color='#1b5e20')
+        plt.tight_layout(pad=2)
+        pdf.savefig(fig2, bbox_inches='tight')
+        plt.close()
+
+        # PAGE 3 — LIME
+        fig3 = lime_exp.as_pyplot_figure()
+        fig3.patch.set_facecolor('#f9fbe7')
+        for a in fig3.get_axes():
+            a.set_facecolor('#f9fbe7')
+            a.tick_params(colors='#1b5e20', labelsize=10)
+            a.xaxis.label.set_color('#1b5e20')
+            a.xaxis.label.set_fontweight('bold')
+            for spine in ['bottom','left']:
+                a.spines[spine].set_color('#a5d6a7')
+            a.spines['top'].set_visible(False)
+            a.spines['right'].set_visible(False)
+        fig3.suptitle(
+            f'XAI Explanation: LIME Individual Prediction\n'
+            f'{city} — {crop} — {year}',
+            fontsize=14, fontweight='bold', color='#1b5e20')
+        plt.tight_layout(pad=1.5)
+        pdf.savefig(fig3, bbox_inches='tight')
+        plt.close()
+
+    buf.seek(0)
+    return buf
+
 # ─────────────────────────────────────────────────────
 # LANGUAGES
 # ─────────────────────────────────────────────────────
 languages = {
     "🇬🇧 English": {
-        "title": "CropAI", "subtitle": "Explainable AI · Smart Yield Prediction",
+        "title": "CropAI — AI Crop Yield Prediction",
+        "subtitle": "Explainable AI · Smart Farming · Real-Time Data",
         "city": "City / Location", "crop": "Crop Type", "year": "Year",
-        "predict": "🔍 Predict My Crop Yield",
-        "weather": "Live Weather", "soil": "Soil Health",
-        "result": "Yield Prediction", "shap": "SHAP — Global XAI Explanation",
+        "predict": "🔍  Predict My Crop Yield",
+        "weather": "Live Weather Data", "soil": "Soil Health Data",
+        "result": "Yield Prediction Result",
+        "shap": "SHAP — Global XAI Explanation",
         "lime": "LIME — Individual XAI Explanation",
-        "rec": "Smart Recommendations",
+        "rec": "Smart Farmer Recommendations",
+        "download": "📥  Download Full Report as PDF",
         "temp": "Temperature", "rain": "Rainfall", "hum": "Humidity",
-        "n": "Nitrogen", "ph": "Soil pH", "oc": "Organic Carbon",
-        "yield": "Predicted Yield"
+        "n": "Nitrogen", "ph": "Soil pH", "yield": "Predicted Yield"
     },
     "🇮🇳 हिंदी": {
-        "title": "CropAI", "subtitle": "व्याख्यात्मक AI · स्मार्ट उपज भविष्यवाणी",
+        "title": "CropAI — AI फसल उपज भविष्यवाणी",
+        "subtitle": "व्याख्यात्मक AI · स्मार्ट खेती · रीयल-टाइम डेटा",
         "city": "शहर / स्थान", "crop": "फसल प्रकार", "year": "वर्ष",
-        "predict": "🔍 मेरी फसल उपज की भविष्यवाणी करें",
-        "weather": "लाइव मौसम", "soil": "मिट्टी स्वास्थ्य",
-        "result": "उपज भविष्यवाणी", "shap": "SHAP — वैश्विक XAI व्याख्या",
+        "predict": "🔍  उपज की भविष्यवाणी करें",
+        "weather": "लाइव मौसम डेटा", "soil": "मिट्टी स्वास्थ्य डेटा",
+        "result": "उपज भविष्यवाणी परिणाम",
+        "shap": "SHAP — वैश्विक XAI व्याख्या",
         "lime": "LIME — व्यक्तिगत XAI व्याख्या",
-        "rec": "स्मार्ट सिफारिशें",
+        "rec": "स्मार्ट किसान सिफारिशें",
+        "download": "📥  पूरी रिपोर्ट PDF में डाउनलोड करें",
         "temp": "तापमान", "rain": "वर्षा", "hum": "आर्द्रता",
-        "n": "नाइट्रोजन", "ph": "मिट्टी pH", "oc": "जैव कार्बन",
-        "yield": "अनुमानित उपज"
+        "n": "नाइट्रोजन", "ph": "मिट्टी pH", "yield": "अनुमानित उपज"
     },
     "🇮🇳 தமிழ்": {
-        "title": "CropAI", "subtitle": "விளக்கமான AI · திறமையான மகசூல் கணிப்பு",
+        "title": "CropAI — AI பயிர் மகசூல் கணிப்பு",
+        "subtitle": "விளக்கமான AI · ஸ்மார்ட் விவசாயம் · நேரடி தரவு",
         "city": "நகரம்", "crop": "பயிர் வகை", "year": "ஆண்டு",
-        "predict": "🔍 என் பயிர் மகசூலை கணிக்கவும்",
-        "weather": "நேரடி வானிலை", "soil": "மண் ஆரோக்கியம்",
-        "result": "மகசூல் கணிப்பு", "shap": "SHAP — உலகளாவிய XAI விளக்கம்",
+        "predict": "🔍  மகசூலை கணிக்கவும்",
+        "weather": "நேரடி வானிலை தரவு", "soil": "மண் ஆரோக்கிய தரவு",
+        "result": "மகசூல் கணிப்பு முடிவு",
+        "shap": "SHAP — உலகளாவிய XAI விளக்கம்",
         "lime": "LIME — தனிப்பட்ட XAI விளக்கம்",
-        "rec": "ஸ்மார்ட் பரிந்துரைகள்",
+        "rec": "ஸ்மார்ட் விவசாயி பரிந்துரைகள்",
+        "download": "📥  PDF அறிக்கையை பதிவிறக்கவும்",
         "temp": "வெப்பநிலை", "rain": "மழை", "hum": "ஈரப்பதம்",
-        "n": "நைட்ரஜன்", "ph": "மண் pH", "oc": "கரிம கார்பன்",
-        "yield": "கணிக்கப்பட்ட மகசூல்"
+        "n": "நைட்ரஜன்", "ph": "மண் pH", "yield": "கணிக்கப்பட்ட மகசூல்"
     },
     "🇮🇳 తెలుగు": {
-        "title": "CropAI", "subtitle": "వివరణాత్మక AI · స్మార్ట్ దిగుబడి అంచనా",
+        "title": "CropAI — AI పంట దిగుబడి అంచనా",
+        "subtitle": "వివరణాత్మక AI · స్మార్ట్ వ్యవసాయం · లైవ్ డేటా",
         "city": "నగరం", "crop": "పంట రకం", "year": "సంవత్సరం",
-        "predict": "🔍 నా పంట దిగుబడిని అంచనా వేయండి",
-        "weather": "లైవ్ వాతావరణం", "soil": "నేల ఆరోగ్యం",
-        "result": "దిగుబడి అంచనా", "shap": "SHAP — గ్లోబల్ XAI వివరణ",
+        "predict": "🔍  దిగుబడిని అంచనా వేయండి",
+        "weather": "లైవ్ వాతావరణ డేటా", "soil": "నేల ఆరోగ్య డేటా",
+        "result": "దిగుబడి అంచనా ఫలితం",
+        "shap": "SHAP — గ్లోబల్ XAI వివరణ",
         "lime": "LIME — వ్యక్తిగత XAI వివరణ",
-        "rec": "స్మార్ట్ సిఫార్సులు",
+        "rec": "స్మార్ట్ రైతు సిఫార్సులు",
+        "download": "📥  పూర్తి నివేదికను PDF గా డౌన్లోడ్ చేయండి",
         "temp": "ఉష్ణోగ్రత", "rain": "వర్షపాతం", "hum": "తేమ",
-        "n": "నైట్రోజన్", "ph": "నేల pH", "oc": "సేంద్రీయ కార్బన్",
-        "yield": "అంచనా దిగుబడి"
+        "n": "నైట్రోజన్", "ph": "నేల pH", "yield": "అంచనా దిగుబడి"
     },
     "🇮🇳 ಕನ್ನಡ": {
-        "title": "CropAI", "subtitle": "ವಿವರಣಾತ್ಮಕ AI · ಸ್ಮಾರ್ಟ್ ಇಳುವರಿ ಮುನ್ಸೂಚನೆ",
+        "title": "CropAI — AI ಬೆಳೆ ಇಳುವರಿ ಮುನ್ಸೂಚನೆ",
+        "subtitle": "ವಿವರಣಾತ್ಮಕ AI · ಸ್ಮಾರ್ಟ್ ಕೃಷಿ · ನೇರ ಡೇಟಾ",
         "city": "ನಗರ", "crop": "ಬೆಳೆ ವಿಧ", "year": "ವರ್ಷ",
-        "predict": "🔍 ನನ್ನ ಬೆಳೆ ಇಳುವರಿ ಮುನ್ಸೂಚಿಸಿ",
-        "weather": "ನೇರ ಹವಾಮಾನ", "soil": "ಮಣ್ಣಿನ ಆರೋಗ್ಯ",
-        "result": "ಇಳುವರಿ ಮುನ್ಸೂಚನೆ", "shap": "SHAP — ಜಾಗತಿಕ XAI ವಿವರಣೆ",
+        "predict": "🔍  ಇಳುವರಿ ಮುನ್ಸೂಚಿಸಿ",
+        "weather": "ನೇರ ಹವಾಮಾನ ಡೇಟಾ", "soil": "ಮಣ್ಣಿನ ಆರೋಗ್ಯ ಡೇಟಾ",
+        "result": "ಇಳುವರಿ ಮುನ್ಸೂಚನಾ ಫಲಿತಾಂಶ",
+        "shap": "SHAP — ಜಾಗತಿಕ XAI ವಿವರಣೆ",
         "lime": "LIME — ವೈಯಕ್ತಿಕ XAI ವಿವರಣೆ",
-        "rec": "ಸ್ಮಾರ್ಟ್ ಶಿಫಾರಸುಗಳು",
+        "rec": "ಸ್ಮಾರ್ಟ್ ರೈತ ಶಿಫಾರಸುಗಳು",
+        "download": "📥  ಪೂರ್ಣ ವರದಿಯನ್ನು PDF ಆಗಿ ಡೌನ್‌ಲೋಡ್ ಮಾಡಿ",
         "temp": "ತಾಪಮಾನ", "rain": "ಮಳೆ", "hum": "ಆರ್ದ್ರತೆ",
-        "n": "ನೈಟ್ರೋಜನ್", "ph": "ಮಣ್ಣಿನ pH", "oc": "ಸಾವಯವ ಇಂಗಾಲ",
-        "yield": "ಅಂದಾಜು ಇಳುವರಿ"
+        "n": "ನೈಟ್ರೋಜನ್", "ph": "ಮಣ್ಣಿನ pH", "yield": "ಅಂದಾಜು ಇಳುವರಿ"
     }
 }
 
 # ─────────────────────────────────────────────────────
 # LOAD MODEL
 # ─────────────────────────────────────────────────────
-with st.spinner("🌱 Initialising CropAI..."):
-    model, le_crop, le_country, explainer, lime_explainer, X_train = load_models()
+with st.spinner("🌱 Loading CropAI... Please wait 1-2 minutes"):
+    model, le_crop, le_country, explainer, lime_explainer = load_models()
 
 # ─────────────────────────────────────────────────────
 # SIDEBAR
 # ─────────────────────────────────────────────────────
 with st.sidebar:
     st.markdown("""
-    <div style='text-align:center; padding: 1rem 0;'>
-        <div style='font-size:2.5rem'>🌾</div>
-        <div style='font-family: Playfair Display, serif; font-size:1.3rem; 
-                    color:#a5d6a7; font-weight:700'>CropAI</div>
-        <div style='font-size:0.7rem; color:#66bb6a; 
-                    text-transform:uppercase; letter-spacing:0.15em'>
-            Smart Farming Platform
-        </div>
+    <div style='text-align:center; padding:1.5rem 0 1rem'>
+        <div style='font-size:3rem'>🌾</div>
+        <div style='font-family:Merriweather,serif; font-size:1.6rem;
+                    font-weight:900; color:#ffffff'>CropAI</div>
+        <div style='font-size:0.7rem; color:#c8e6c9;
+                    text-transform:uppercase; letter-spacing:0.15em;
+                    margin-top:0.3rem'>Smart Farming Platform</div>
     </div>
     """, unsafe_allow_html=True)
 
-    st.markdown("<div class='fancy-divider'></div>", unsafe_allow_html=True)
-
-    selected_lang = st.selectbox(
-        "🌐 Language / भाषा",
-        list(languages.keys())
-    )
+    st.markdown("---")
+    selected_lang = st.selectbox("🌐 Language / भाषा", list(languages.keys()))
     lang = languages[selected_lang]
 
-    st.markdown("<div class='fancy-divider'></div>", unsafe_allow_html=True)
+    st.markdown("---")
+    st.markdown("<p style='color:#c8e6c9; font-size:0.75rem; font-weight:800; text-transform:uppercase; letter-spacing:0.1em'>Model Performance</p>", unsafe_allow_html=True)
+    c1, c2 = st.columns(2)
+    c1.metric("R² Score", "0.9857")
+    c2.metric("RMSE", "10,189")
 
+    st.markdown("---")
     st.markdown("""
-    <div style='padding: 0.5rem 0'>
-        <div style='font-size:0.7rem; color:#66bb6a; 
-                    text-transform:uppercase; letter-spacing:0.1em; 
-                    margin-bottom:0.8rem'>
-            Model Performance
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
-
-    col_a, col_b = st.columns(2)
-    col_a.metric("R² Score", "0.9857")
-    col_b.metric("RMSE", "10,189")
-
-    st.markdown("<br>", unsafe_allow_html=True)
-    st.markdown("""
-    <div style='background: rgba(76,175,80,0.1); border-radius:10px; 
-                padding:0.8rem; font-size:0.8rem; color:#a5d6a7'>
-        <b>🧠 XAI Methods</b><br><br>
-        <b>SHAP</b> — Explains overall feature importance across all predictions<br><br>
-        <b>LIME</b> — Explains your specific prediction locally
-    </div>
-    """, unsafe_allow_html=True)
-
-    st.markdown("<br>", unsafe_allow_html=True)
-    st.markdown("""
-    <div style='background: rgba(76,175,80,0.1); border-radius:10px; 
-                padding:0.8rem; font-size:0.8rem; color:#a5d6a7'>
-        <b>📡 Data Sources</b><br><br>
+    <div style='background:rgba(255,255,255,0.12); border-radius:12px;
+                padding:1rem; font-size:0.88rem; color:#ffffff; line-height:2'>
+        <b style='color:#c8e6c9'>🧠 XAI Methods</b><br>
+        <b>SHAP</b> — Global explanation<br>
+        <b>LIME</b> — Individual explanation<br><br>
+        <b style='color:#c8e6c9'>📡 Data Sources</b><br>
         🌤️ Open-Meteo — Live weather<br>
-        🌱 ISRIC SoilGrids — Soil data<br>
-        📊 FAO — Historical yield data
+        🌱 ISRIC — Soil profiles<br>
+        📊 FAO — Crop records
     </div>
     """, unsafe_allow_html=True)
 
 # ─────────────────────────────────────────────────────
-# MAIN CONTENT
+# MAIN
 # ─────────────────────────────────────────────────────
 
-# Hero Section
+# Hero
 st.markdown(f"""
-<div style='padding: 2rem 0 1rem 0'>
-    <div class='hero-title'>{lang['title']}</div>
-    <div class='hero-subtitle'>{lang['subtitle']}</div>
+<div class='hero-wrap'>
+    <div class='hero-title'>🌾 {lang['title']}</div>
+    <div class='hero-sub'>{lang['subtitle']}</div>
+    <div style='margin-top:1rem'>
+        <span class='badge'>✅ Random Forest ML</span>
+        <span class='badge'>🧠 SHAP Explainability</span>
+        <span class='badge'>🔬 LIME Explainability</span>
+        <span class='badge'>📡 Live Weather API</span>
+        <span class='badge'>🌱 Soil Intelligence</span>
+        <span class='badge'>🌐 5 Languages</span>
+        <span class='badge'>📥 PDF Report</span>
+    </div>
 </div>
 """, unsafe_allow_html=True)
 
-st.markdown("<div class='fancy-divider'></div>", unsafe_allow_html=True)
+# Inputs
+st.markdown("<div class='sec-header'>📍 Enter Your Farm Details</div>", unsafe_allow_html=True)
 
-# Input Section
-st.markdown("<div class='section-header'>📍 Farm Details</div>",
-            unsafe_allow_html=True)
-
-col1, col2, col3 = st.columns([2, 2, 1])
-with col1:
-    city = st.text_input(
-        lang["city"],
-        placeholder="e.g. Bangalore, Mumbai, Delhi")
-with col2:
-    crops = [
-        "Maize", "Potatoes", "Rice, paddy", "Sorghum",
-        "Soybeans", "Wheat", "Cassava",
-        "Sweet potatoes", "Yams", "Plantains and others"
-    ]
+c1, c2, c3 = st.columns([2, 2, 1])
+with c1:
+    city = st.text_input(lang["city"], placeholder="e.g. Bangalore, Mumbai, Delhi")
+with c2:
+    crops = ["Maize", "Potatoes", "Rice, paddy", "Sorghum",
+             "Soybeans", "Wheat", "Cassava",
+             "Sweet potatoes", "Yams", "Plantains and others"]
     crop = st.selectbox(lang["crop"], crops)
-with col3:
+with c3:
     year = st.selectbox(lang["year"], list(range(2024, 2031)))
 
 st.markdown("<br>", unsafe_allow_html=True)
-
-predict_btn = st.button(
-    lang["predict"],
-    use_container_width=True,
-    type="primary"
-)
+predict_btn = st.button(lang["predict"], use_container_width=True, type="primary")
 
 # ─────────────────────────────────────────────────────
-# PREDICTION LOGIC
+# PREDICTION
 # ─────────────────────────────────────────────────────
 if predict_btn:
     if not city:
@@ -578,353 +724,254 @@ if predict_btn:
             weather = get_weather(city)
 
         if not weather:
-            st.error("❌ Location not found. Please check the city name.")
+            st.error("❌ Location not found. Please try another city name.")
         else:
             soil = get_soil(weather["latitude"])
 
-            st.markdown("<div class='fancy-divider'></div>",
-                        unsafe_allow_html=True)
+            st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
 
             # ── Weather + Soil ──
-            st.markdown(
-                f"<div class='section-header'>📡 {lang['weather']} &nbsp;&nbsp; 🌱 {lang['soil']}</div>",
-                unsafe_allow_html=True)
+            st.markdown(f"<div class='sec-header'>📡 {lang['weather']}  &nbsp;|&nbsp;  🌱 {lang['soil']}</div>", unsafe_allow_html=True)
+            w1, w2, w3, s1, s2, s3 = st.columns(6)
+            w1.metric(lang["temp"], f"{weather['temperature']:.1f}°C")
+            w2.metric(lang["rain"], f"{weather['rainfall']:.1f} mm")
+            w3.metric(lang["hum"], f"{weather['humidity']:.0f}%")
+            s1.metric(lang["n"], f"{soil['nitrogen']} g/kg")
+            s2.metric(lang["ph"], f"{soil['ph']}")
+            s3.metric("Region", soil["region"])
 
-            wc1, wc2, wc3, sc1, sc2, sc3 = st.columns(6)
-            wc1.metric(lang["temp"],
-                      f"{weather['temperature']:.1f}°C")
-            wc2.metric(lang["rain"],
-                      f"{weather['rainfall']:.1f} mm")
-            wc3.metric(lang["hum"],
-                      f"{weather['humidity']:.0f}%")
-            sc1.metric(lang["n"],
-                      f"{soil['nitrogen']} g/kg")
-            sc2.metric(lang["ph"],
-                      f"{soil['ph']}")
-            sc3.metric("Region", soil["region"])
-
-            st.markdown("<div class='fancy-divider'></div>",
-                        unsafe_allow_html=True)
+            st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
 
             # ── Prediction ──
-            crop_enc = le_crop.transform([crop])[0] \
-                if crop in le_crop.classes_ else 0
-            country_enc = le_country.transform(
-                [weather["country"]])[0] \
-                if weather["country"] in le_country.classes_ \
-                else 0
+            crop_enc = le_crop.transform([crop])[0] if crop in le_crop.classes_ else 0
+            country_enc = le_country.transform([weather["country"]])[0] if weather["country"] in le_country.classes_ else 0
             annual_rain = max(weather["rainfall"] * 365, 800)
 
-            input_data = np.array([[
-                crop_enc, country_enc, year,
-                annual_rain, 100,
-                weather["temperature"]
-            ]])
-
+            input_data = np.array([[crop_enc, country_enc, year, annual_rain, 100, weather["temperature"]]])
             predicted = model.predict(input_data)[0]
             predicted_tons = predicted / 10000
 
-            # Result Banner
-            st.markdown(
-                f"<div class='section-header'>📊 {lang['result']}</div>",
-                unsafe_allow_html=True)
-
+            st.markdown(f"<div class='sec-header'>📊 {lang['result']}</div>", unsafe_allow_html=True)
             st.markdown(f"""
             <div class='result-banner'>
-                <div class='result-label'>{lang['yield']}</div>
-                <div class='result-yield'>{predicted_tons:.2f} <span style='font-size:1.5rem'>tons/ha</span></div>
-                <div style='margin-top:0.8rem; display:flex; justify-content:center; gap:2rem'>
-                    <div style='text-align:center'>
-                        <div style='font-size:0.7rem; color:#a5d6a7; text-transform:uppercase; letter-spacing:0.1em'>Model</div>
-                        <div style='font-size:1rem; color:white; font-weight:600'>Random Forest</div>
+                <div class='result-sub'>{lang['yield']}</div>
+                <div class='result-number'>{predicted_tons:.2f} <span class='result-unit'>tons/ha</span></div>
+                <div style='display:flex; justify-content:center; gap:1.5rem; margin-top:1.2rem; flex-wrap:wrap'>
+                    <div style='background:rgba(255,255,255,0.15); border-radius:10px; padding:0.6rem 1.2rem; text-align:center'>
+                        <div style='font-size:0.65rem; color:#c8e6c9; text-transform:uppercase; letter-spacing:0.1em'>Algorithm</div>
+                        <div style='font-size:1rem; color:#fff; font-weight:800'>Random Forest</div>
                     </div>
-                    <div style='text-align:center'>
-                        <div style='font-size:0.7rem; color:#a5d6a7; text-transform:uppercase; letter-spacing:0.1em'>Accuracy</div>
-                        <div style='font-size:1rem; color:white; font-weight:600'>98.57% (R²)</div>
+                    <div style='background:rgba(255,255,255,0.15); border-radius:10px; padding:0.6rem 1.2rem; text-align:center'>
+                        <div style='font-size:0.65rem; color:#c8e6c9; text-transform:uppercase; letter-spacing:0.1em'>Accuracy (R²)</div>
+                        <div style='font-size:1rem; color:#fff; font-weight:800'>98.57%</div>
                     </div>
-                    <div style='text-align:center'>
-                        <div style='font-size:0.7rem; color:#a5d6a7; text-transform:uppercase; letter-spacing:0.1em'>Crop</div>
-                        <div style='font-size:1rem; color:white; font-weight:600'>{crop}</div>
+                    <div style='background:rgba(255,255,255,0.15); border-radius:10px; padding:0.6rem 1.2rem; text-align:center'>
+                        <div style='font-size:0.65rem; color:#c8e6c9; text-transform:uppercase; letter-spacing:0.1em'>Location</div>
+                        <div style='font-size:1rem; color:#fff; font-weight:800'>{city}</div>
                     </div>
-                    <div style='text-align:center'>
-                        <div style='font-size:0.7rem; color:#a5d6a7; text-transform:uppercase; letter-spacing:0.1em'>Location</div>
-                        <div style='font-size:1rem; color:white; font-weight:600'>{city}</div>
+                    <div style='background:rgba(255,255,255,0.15); border-radius:10px; padding:0.6rem 1.2rem; text-align:center'>
+                        <div style='font-size:0.65rem; color:#c8e6c9; text-transform:uppercase; letter-spacing:0.1em'>Crop</div>
+                        <div style='font-size:1rem; color:#fff; font-weight:800'>{crop}</div>
                     </div>
                 </div>
             </div>
             """, unsafe_allow_html=True)
 
-            st.markdown("<div class='fancy-divider'></div>",
-                        unsafe_allow_html=True)
+            st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
 
-            # ── SHAP Explanation ──
-            st.markdown(
-                f"<div class='section-header'>🧠 {lang['shap']}</div>",
-                unsafe_allow_html=True)
+            # ── SHAP ──
+            st.markdown(f"<div class='sec-header'>🧠 {lang['shap']}</div>", unsafe_allow_html=True)
             st.markdown("""
-            <div style='font-size:0.85rem; color:#81c784; margin-bottom:1rem'>
-                SHAP (SHapley Additive exPlanations) shows which features 
-                push the prediction higher (green) or lower (red) globally.
+            <div class='info-card'>
+                <div class='info-card-title'>What is SHAP?</div>
+                <b>SHAP</b> (SHapley Additive exPlanations) shows which features push the
+                yield prediction <b style='color:#2e7d32'>HIGHER ↑ (green bars)</b> or
+                <b style='color:#c62828'>LOWER ↓ (red bars)</b>.
+                This is the <b>global explanation</b> — showing overall feature importance.
             </div>
             """, unsafe_allow_html=True)
 
             shap_vals = explainer.shap_values(input_data)
-            feature_names = ["Crop Type", "Country", "Year",
-                            "Rainfall", "Pesticides", "Temperature"]
+            feature_names = ["Crop Type", "Country", "Year", "Rainfall", "Pesticides", "Temperature"]
 
             fig, ax = plt.subplots(figsize=(10, 5))
-            fig.patch.set_facecolor('#1a2f1a')
-            ax.set_facecolor('#1a2f1a')
-
-            colors = ['#4caf50' if v > 0 else '#ef5350'
-                     for v in shap_vals[0]]
-            bars = ax.barh(feature_names, shap_vals[0],
-                          color=colors, alpha=0.85,
-                          edgecolor='none', height=0.6)
-
-            ax.axvline(x=0, color='#ffffff', linewidth=1,
-                      alpha=0.3)
-            ax.set_xlabel("SHAP Value (Impact on Predicted Yield hg/ha)",
-                         color='#a5d6a7', fontsize=10)
-            ax.set_title("XAI Feature Impact Analysis (SHAP)",
-                        color='#e8f5e9', fontsize=12,
-                        fontweight='bold', pad=15)
-            ax.tick_params(colors='#a5d6a7', labelsize=10)
-            ax.spines['bottom'].set_color('#2e7d32')
-            ax.spines['left'].set_color('#2e7d32')
+            fig.patch.set_facecolor('#f9fbe7')
+            ax.set_facecolor('#f9fbe7')
+            colors = ['#43a047' if v > 0 else '#e53935' for v in shap_vals[0]]
+            bars = ax.barh(feature_names, shap_vals[0], color=colors, alpha=0.9, edgecolor='white', height=0.55)
+            ax.axvline(x=0, color='#333', linewidth=2, alpha=0.4)
+            ax.set_xlabel("SHAP Value — Impact on Predicted Yield (hg/ha)", fontsize=11, color='#1b5e20', fontweight='bold')
+            ax.set_title("XAI (SHAP): Which Factors Affect Crop Yield?", fontsize=13, fontweight='bold', color='#1b5e20', pad=12)
+            ax.tick_params(colors='#1b5e20', labelsize=11)
+            for spine in ['bottom', 'left']:
+                ax.spines[spine].set_color('#a5d6a7')
+                ax.spines[spine].set_linewidth(2)
             ax.spines['top'].set_visible(False)
             ax.spines['right'].set_visible(False)
-
-            for i, (bar, val) in enumerate(
-                    zip(bars, shap_vals[0])):
+            for bar, val in zip(bars, shap_vals[0]):
                 label = f"+{val:.0f}" if val > 0 else f"{val:.0f}"
-                x_pos = val + (max(shap_vals[0]) * 0.02) \
-                        if val >= 0 \
-                        else val - (max(abs(shap_vals[0])) * 0.02)
-                ha = 'left' if val >= 0 else 'right'
-                ax.text(x_pos, i, label, va='center',
-                       ha=ha, color='white', fontsize=9,
-                       fontweight='bold')
-
+                ax.text(val, bar.get_y() + bar.get_height()/2,
+                       f"  {label}  ", va='center',
+                       ha='left' if val >= 0 else 'right',
+                       color='#1b5e20', fontsize=10, fontweight='bold')
             plt.tight_layout()
             st.pyplot(fig)
             plt.close()
 
-            # SHAP text explanation
-            st.markdown("**Key Findings:**")
-            exp_cols = st.columns(3)
-            sorted_shap = sorted(
-                zip(feature_names, shap_vals[0]),
-                key=lambda x: abs(x[1]), reverse=True)
-
+            st.markdown("**📋 SHAP Key Findings:**")
+            sorted_shap = sorted(zip(feature_names, shap_vals[0]), key=lambda x: abs(x[1]), reverse=True)
+            ec1, ec2, ec3 = st.columns(3)
             for i, (feat, val) in enumerate(sorted_shap[:6]):
-                col_idx = i % 3
-                with exp_cols[col_idx]:
+                with [ec1, ec2, ec3][i % 3]:
                     if val > 0:
-                        st.success(
-                            f"✅ **{feat}** +{val:.0f} hg/ha")
+                        st.success(f"✅ **{feat}**\n\n↑ +{val:.0f} hg/ha")
                     else:
-                        st.error(
-                            f"❌ **{feat}** {val:.0f} hg/ha")
+                        st.error(f"❌ **{feat}**\n\n↓ {val:.0f} hg/ha")
 
-            st.markdown("<div class='fancy-divider'></div>",
-                        unsafe_allow_html=True)
+            st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
 
-            # ── LIME Explanation ──
-            st.markdown(
-                f"<div class='section-header'>🔬 {lang['lime']}</div>",
-                unsafe_allow_html=True)
+            # ── LIME ──
+            st.markdown(f"<div class='sec-header'>🔬 {lang['lime']}</div>", unsafe_allow_html=True)
             st.markdown("""
-            <div style='font-size:0.85rem; color:#81c784; margin-bottom:1rem'>
-                LIME (Local Interpretable Model-agnostic Explanations) 
-                explains <b>this specific farmer's prediction</b> individually — 
-                showing exactly why YOUR yield was predicted this way.
+            <div class='info-card'>
+                <div class='info-card-title'>What is LIME?</div>
+                <b>LIME</b> (Local Interpretable Model-agnostic Explanations) explains
+                <b>YOUR specific prediction</b> individually.
+                Unlike SHAP (global), LIME tells you exactly why
+                <b>your farm's specific yield</b> was predicted this value —
+                personalized explanation for each farmer.
             </div>
             """, unsafe_allow_html=True)
 
-            with st.spinner("Generating personalised LIME explanation..."):
+            with st.spinner("🔬 Generating personalised LIME explanation..."):
                 lime_exp = lime_explainer.explain_instance(
-                    data_row=input_data[0],
-                    predict_fn=model.predict,
-                    num_features=6
-                )
+                    data_row=input_data[0], predict_fn=model.predict, num_features=6)
 
             fig2 = lime_exp.as_pyplot_figure()
-            fig2.patch.set_facecolor('#1a2f1a')
+            fig2.patch.set_facecolor('#f9fbe7')
             for ax2 in fig2.get_axes():
-                ax2.set_facecolor('#1a2f1a')
-                ax2.tick_params(colors='#a5d6a7')
-                ax2.xaxis.label.set_color('#a5d6a7')
-                ax2.title.set_color('#e8f5e9')
-                for spine in ax2.spines.values():
-                    spine.set_color('#2e7d32')
-            fig2.suptitle(
-                "XAI Individual Prediction Explanation (LIME)",
-                color='#e8f5e9', fontsize=11,
-                fontweight='bold')
-            plt.tight_layout()
+                ax2.set_facecolor('#f9fbe7')
+                ax2.tick_params(colors='#1b5e20', labelsize=10)
+                ax2.xaxis.label.set_color('#1b5e20')
+                ax2.xaxis.label.set_fontweight('bold')
+                for spine in ['bottom', 'left']:
+                    ax2.spines[spine].set_color('#a5d6a7')
+                ax2.spines['top'].set_visible(False)
+                ax2.spines['right'].set_visible(False)
+            fig2.suptitle(f"XAI (LIME): Individual Explanation — {city}, {crop}, {year}",
+                         fontsize=13, fontweight='bold', color='#1b5e20')
+            plt.tight_layout(pad=1.5)
             st.pyplot(fig2)
             plt.close()
 
-            # LIME text
-            st.markdown("**Your Personalised Explanation:**")
-            lime_cols = st.columns(2)
-            for i, (feature, importance) in enumerate(
-                    lime_exp.as_list()):
-                col_idx = i % 2
-                with lime_cols[col_idx]:
+            st.markdown("**📋 Your Personalised LIME Explanation:**")
+            lc1, lc2 = st.columns(2)
+            for i, (feature, importance) in enumerate(lime_exp.as_list()):
+                with lc1 if i % 2 == 0 else lc2:
                     if importance > 0:
-                        st.success(
-                            f"✅ {feature} → "
-                            f"**+{abs(importance):.0f}** hg/ha")
+                        st.success(f"✅ {feature}\n\n↑ **+{abs(importance):.0f} hg/ha**")
                     else:
-                        st.error(
-                            f"❌ {feature} → "
-                            f"**-{abs(importance):.0f}** hg/ha")
+                        st.error(f"❌ {feature}\n\n↓ **-{abs(importance):.0f} hg/ha**")
 
-            st.markdown("<div class='fancy-divider'></div>",
-                        unsafe_allow_html=True)
+            st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
 
             # ── Recommendations ──
-            st.markdown(
-                f"<div class='section-header'>✅ {lang['rec']}</div>",
-                unsafe_allow_html=True)
+            st.markdown(f"<div class='sec-header'>✅ {lang['rec']}</div>", unsafe_allow_html=True)
 
             r1, r2, r3, r4 = st.columns(4)
+            t = weather["temperature"]
+            rf_val = weather["rainfall"]
+            ph = soil["ph"]
+            hum = weather["humidity"]
 
-            # Temperature
             with r1:
-                st.markdown("""
-                <div style='font-size:0.7rem; color:#66bb6a; 
-                            text-transform:uppercase; 
-                            letter-spacing:0.1em; 
-                            margin-bottom:0.5rem'>
-                    🌡️ Temperature
-                </div>""", unsafe_allow_html=True)
-                t = weather["temperature"]
+                st.markdown("<p style='color:#1b5e20; font-size:0.8rem; font-weight:800; text-transform:uppercase; letter-spacing:0.08em'>🌡️ Temperature</p>", unsafe_allow_html=True)
                 if t > 30:
-                    st.error(f"**{t:.1f}°C — Too High**")
-                    st.markdown("→ Increase irrigation frequency\n\n→ Install shade nets\n\n→ Avoid afternoon fieldwork")
+                    st.markdown(f"<div class='rec-danger'><div class='rec-title'>⚠️ {t:.1f}°C — Too High</div><div class='rec-item'>→ Increase irrigation</div><div class='rec-item'>→ Install shade nets</div><div class='rec-item'>→ Avoid afternoon work</div></div>", unsafe_allow_html=True)
                 elif t < 15:
-                    st.warning(f"**{t:.1f}°C — Too Low**")
-                    st.markdown("→ Delay sowing by 1-2 weeks\n\n→ Use crop covers at night\n\n→ Protect young seedlings")
+                    st.markdown(f"<div class='rec-warn'><div class='rec-title'>⚠️ {t:.1f}°C — Too Low</div><div class='rec-item'>→ Delay planting 1-2 weeks</div><div class='rec-item'>→ Use crop covers</div><div class='rec-item'>→ Protect seedlings</div></div>", unsafe_allow_html=True)
                 else:
-                    st.success(f"**{t:.1f}°C — Optimal ✅**")
-                    st.markdown("→ Ideal planting conditions\n\n→ Maintain normal irrigation\n\n→ Monitor weekly")
+                    st.markdown(f"<div class='rec-optimal'><div class='rec-title'>✅ {t:.1f}°C — Optimal</div><div class='rec-item'>→ Ideal conditions</div><div class='rec-item'>→ Normal irrigation</div><div class='rec-item'>→ Monitor weekly</div></div>", unsafe_allow_html=True)
 
-            # Irrigation
             with r2:
-                st.markdown("""
-                <div style='font-size:0.7rem; color:#66bb6a; 
-                            text-transform:uppercase; 
-                            letter-spacing:0.1em; 
-                            margin-bottom:0.5rem'>
-                    🌧️ Irrigation
-                </div>""", unsafe_allow_html=True)
-                rf_val = weather["rainfall"]
+                st.markdown("<p style='color:#1b5e20; font-size:0.8rem; font-weight:800; text-transform:uppercase; letter-spacing:0.08em'>🌧️ Irrigation</p>", unsafe_allow_html=True)
                 if rf_val < 2:
-                    st.warning(f"**{rf_val:.1f}mm — Low Rainfall**")
-                    st.markdown("→ Irrigate 2× per week\n\n→ Check soil moisture daily\n\n→ Drip irrigation recommended")
+                    st.markdown(f"<div class='rec-warn'><div class='rec-title'>⚠️ {rf_val:.1f}mm — Low</div><div class='rec-item'>→ Irrigate 2× per week</div><div class='rec-item'>→ Check daily moisture</div><div class='rec-item'>→ Use drip irrigation</div></div>", unsafe_allow_html=True)
                 elif rf_val > 20:
-                    st.error(f"**{rf_val:.1f}mm — Heavy Rain**")
-                    st.markdown("→ Ensure proper drainage\n\n→ Avoid waterlogging\n\n→ Delay spraying")
+                    st.markdown(f"<div class='rec-danger'><div class='rec-title'>⚠️ {rf_val:.1f}mm — Heavy</div><div class='rec-item'>→ Ensure drainage</div><div class='rec-item'>→ Avoid waterlogging</div><div class='rec-item'>→ Delay spraying</div></div>", unsafe_allow_html=True)
                 else:
-                    st.success(f"**{rf_val:.1f}mm — Adequate ✅**")
-                    st.markdown("→ Monitor field drainage\n\n→ Normal schedule\n\n→ Weekly soil check")
+                    st.markdown(f"<div class='rec-optimal'><div class='rec-title'>✅ {rf_val:.1f}mm — Adequate</div><div class='rec-item'>→ Monitor drainage</div><div class='rec-item'>→ Normal schedule</div><div class='rec-item'>→ Weekly soil check</div></div>", unsafe_allow_html=True)
 
-            # Fertilizer
             with r3:
-                st.markdown("""
-                <div style='font-size:0.7rem; color:#66bb6a; 
-                            text-transform:uppercase; 
-                            letter-spacing:0.1em; 
-                            margin-bottom:0.5rem'>
-                    🌿 Fertilizer
-                </div>""", unsafe_allow_html=True)
-                ph = soil["ph"]
+                st.markdown("<p style='color:#1b5e20; font-size:0.8rem; font-weight:800; text-transform:uppercase; letter-spacing:0.08em'>🌿 Fertilizer</p>", unsafe_allow_html=True)
                 if ph < 6.0:
-                    st.warning(f"**pH {ph} — Acidic Soil**")
-                    st.markdown("→ Apply lime 2-3 bags/acre\n\n→ Retest pH after 2 weeks\n\n→ Use phosphate fertilizer")
+                    st.markdown(f"<div class='rec-warn'><div class='rec-title'>⚠️ pH {ph} — Acidic</div><div class='rec-item'>→ Add lime 2-3 bags/acre</div><div class='rec-item'>→ Retest after 2 weeks</div><div class='rec-item'>→ Use phosphate</div></div>", unsafe_allow_html=True)
                 elif ph > 7.5:
-                    st.warning(f"**pH {ph} — Alkaline Soil**")
-                    st.markdown("→ Add sulfur to reduce pH\n\n→ Use acidic fertilizers\n\n→ Increase irrigation")
+                    st.markdown(f"<div class='rec-warn'><div class='rec-title'>⚠️ pH {ph} — Alkaline</div><div class='rec-item'>→ Add sulfur</div><div class='rec-item'>→ Use acidic fertilizers</div><div class='rec-item'>→ Increase irrigation</div></div>", unsafe_allow_html=True)
                 else:
-                    st.success(f"**pH {ph} — Optimal ✅**")
-                    st.markdown("→ Apply urea 25 kg/acre\n\n→ Balanced NPK dose\n\n→ Apply after rainfall")
+                    st.markdown(f"<div class='rec-optimal'><div class='rec-title'>✅ pH {ph} — Optimal</div><div class='rec-item'>→ Urea 25 kg/acre</div><div class='rec-item'>→ Balanced NPK dose</div><div class='rec-item'>→ Apply after rain</div></div>", unsafe_allow_html=True)
 
-            # Pest Control
             with r4:
-                st.markdown("""
-                <div style='font-size:0.7rem; color:#66bb6a; 
-                            text-transform:uppercase; 
-                            letter-spacing:0.1em; 
-                            margin-bottom:0.5rem'>
-                    🐛 Pest Control
-                </div>""", unsafe_allow_html=True)
-                temp = weather["temperature"]
-                hum = weather["humidity"]
-                if temp > 28 and hum > 70:
-                    st.error("**HIGH RISK ⚠️**")
-                    st.markdown("→ Spray neem oil weekly\n\n→ Set pheromone traps\n\n→ Daily crop inspection")
-                elif temp > 25:
-                    st.warning("**MEDIUM RISK**")
-                    st.markdown("→ Weekly monitoring\n\n→ Preventive spray\n\n→ Remove infected parts")
+                st.markdown("<p style='color:#1b5e20; font-size:0.8rem; font-weight:800; text-transform:uppercase; letter-spacing:0.08em'>🐛 Pest Control</p>", unsafe_allow_html=True)
+                if t > 28 and hum > 70:
+                    st.markdown("<div class='rec-danger'><div class='rec-title'>🔴 HIGH RISK</div><div class='rec-item'>→ Spray neem oil weekly</div><div class='rec-item'>→ Set pheromone traps</div><div class='rec-item'>→ Daily inspection</div></div>", unsafe_allow_html=True)
+                elif t > 25:
+                    st.markdown("<div class='rec-warn'><div class='rec-title'>🟡 MEDIUM RISK</div><div class='rec-item'>→ Weekly monitoring</div><div class='rec-item'>→ Preventive spray</div><div class='rec-item'>→ Remove infected parts</div></div>", unsafe_allow_html=True)
                 else:
-                    st.success("**LOW RISK ✅**")
-                    st.markdown("→ Monthly inspection\n\n→ Standard monitoring\n\n→ Record observations")
+                    st.markdown("<div class='rec-optimal'><div class='rec-title'>🟢 LOW RISK</div><div class='rec-item'>→ Monthly inspection</div><div class='rec-item'>→ Standard monitoring</div><div class='rec-item'>→ Record observations</div></div>", unsafe_allow_html=True)
 
-            # Crop Specific
+            # Crop specific
             st.markdown("<br>", unsafe_allow_html=True)
-            st.markdown("""
-            <div style='font-size:0.7rem; color:#66bb6a; 
-                        text-transform:uppercase; 
-                        letter-spacing:0.1em; 
-                        margin-bottom:0.8rem'>
-                🌾 Crop-Specific Advisory
-            </div>""", unsafe_allow_html=True)
-
             ca1, ca2 = st.columns(2)
             with ca1:
-                if crop in ["Rice, paddy", "Wheat",
-                           "Maize", "Sorghum"]:
-                    st.info(f"**{crop} — Cereal Crop Advisory**\n\n"
-                           "→ Watch for stem borer and leaf blast\n\n"
-                           "→ Use pheromone traps every 10 days\n\n"
-                           "→ Apply pesticide early morning (6-8 AM)")
-                elif crop in ["Soybeans", "Potatoes",
-                             "Sweet potatoes"]:
-                    st.info(f"**{crop} — Root/Legume Advisory**\n\n"
-                           "→ Monitor for aphids and whitefly\n\n"
-                           "→ Check undersides of leaves weekly\n\n"
-                           "→ Use yellow sticky traps")
+                st.markdown("<p style='color:#1b5e20; font-size:0.8rem; font-weight:800; text-transform:uppercase'>🌾 Crop-Specific Advisory</p>", unsafe_allow_html=True)
+                if crop in ["Rice, paddy", "Wheat", "Maize", "Sorghum"]:
+                    st.info(f"**{crop} — Cereal Crop**\n\n→ Watch for stem borer & leaf blast\n\n→ Pheromone traps every 10 days\n\n→ Spray 6–8 AM only")
+                elif crop in ["Soybeans", "Potatoes", "Sweet potatoes"]:
+                    st.info(f"**{crop} — Root/Legume Crop**\n\n→ Monitor aphids & whitefly weekly\n\n→ Check undersides of leaves\n\n→ Yellow sticky traps")
                 else:
-                    st.info(f"**{crop} — Plantation Advisory**\n\n"
-                           "→ General pest monitoring monthly\n\n"
-                           "→ Contact local KVK for guidance\n\n"
-                           "→ Follow state agriculture advisory")
-
+                    st.info(f"**{crop} — Plantation Crop**\n\n→ Monthly pest monitoring\n\n→ Contact local KVK\n\n→ Follow state advisory")
             with ca2:
+                st.markdown("<p style='color:#1b5e20; font-size:0.8rem; font-weight:800; text-transform:uppercase'>📅 Spray Timing</p>", unsafe_allow_html=True)
                 if weather["rainfall"] > 5:
-                    st.warning("**🌧️ Rain Detected — Spray Timing Alert**\n\n"
-                              "→ Delay all pesticide spraying\n\n"
-                              "→ Wait minimum 48 hours after rain\n\n"
-                              "→ Reapply if washed off by rain")
+                    st.warning("**🌧️ Rain Detected — Delay Spraying**\n\n→ Wait 48 hours after rain\n\n→ Reapply if washed off\n\n→ Check for crop damage")
                 else:
-                    st.success("**☀️ Good Conditions for Spraying**\n\n"
-                              "→ Spray between 6 AM and 8 AM only\n\n"
-                              "→ Avoid spraying in afternoon heat\n\n"
-                              "→ Wear protective gear always")
+                    st.success("**☀️ Good for Spraying Today**\n\n→ Spray between 6–8 AM\n\n→ Avoid afternoon heat\n\n→ Wear protective gear")
 
-# ─────────────────────────────────────────────────────
-# FOOTER
-# ─────────────────────────────────────────────────────
-st.markdown("<div class='fancy-divider'></div>",
-            unsafe_allow_html=True)
+            st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
+
+            # ── PDF Download ──
+            st.markdown("<div class='sec-header'>📥 Download Your Report</div>", unsafe_allow_html=True)
+            st.markdown("""
+            <div class='info-card'>
+                <div class='info-card-title'>What is in the PDF Report?</div>
+                <b>Page 1:</b> Complete prediction summary — weather, soil, yield result, all recommendations<br>
+                <b>Page 2:</b> SHAP feature importance chart (Global XAI explanation)<br>
+                <b>Page 3:</b> LIME individual prediction chart (Your personalised XAI explanation)
+            </div>
+            """, unsafe_allow_html=True)
+
+            with st.spinner("📄 Generating your PDF report..."):
+                pdf_buf = generate_pdf(
+                    city, crop, year, weather, soil,
+                    predicted_tons, shap_vals,
+                    feature_names, lime_exp)
+
+            st.download_button(
+                label=lang["download"],
+                data=pdf_buf,
+                file_name=f"CropAI_{city}_{crop}_{year}.pdf",
+                mime="application/pdf",
+                use_container_width=True
+            )
+            st.success("✅ PDF ready! Click the button above to download.")
+
+# Footer
 st.markdown("""
 <div class='footer'>
-    🌾 CropAI — AI Crop Yield Prediction System &nbsp;|&nbsp; 
-    Random Forest + SHAP + LIME &nbsp;|&nbsp; 
-    Live Weather via Open-Meteo API &nbsp;|&nbsp; 
+    🌾 CropAI — AI-Powered Crop Yield Prediction System &nbsp;|&nbsp;
+    Random Forest + SHAP + LIME XAI &nbsp;|&nbsp;
+    Live Weather via Open-Meteo API &nbsp;|&nbsp;
     IEEE Research Project
 </div>
 """, unsafe_allow_html=True)
