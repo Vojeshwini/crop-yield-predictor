@@ -1,3 +1,4 @@
+
 import streamlit as st
 import numpy as np
 import pandas as pd
@@ -18,6 +19,8 @@ def load_models():
     from sklearn.preprocessing import LabelEncoder
     from sklearn.model_selection import train_test_split
     import shap
+    import lime
+    import lime.lime_tabular
 
     df = pd.read_csv('yield_df.csv')
     df = df.drop(columns=['Unnamed: 0'])
@@ -48,9 +51,18 @@ def load_models():
     rf = RandomForestRegressor(
         n_estimators=100, random_state=42, n_jobs=-1)
     rf.fit(X_train, y_train)
+
     explainer = shap.TreeExplainer(rf)
 
-    return rf, le_crop, le_country, explainer
+    lime_explainer = lime.lime_tabular.LimeTabularExplainer(
+        training_data=np.array(X_train),
+        feature_names=['Crop Type', 'Country', 'Year',
+                      'Rainfall', 'Pesticides', 'Temperature'],
+        mode='regression',
+        random_state=42
+    )
+
+    return rf, le_crop, le_country, explainer, lime_explainer, X_train
 
 def get_weather(city_name):
     try:
@@ -116,7 +128,8 @@ languages = {
         "weather": "Live Weather Data",
         "soil": "Soil Health Data",
         "result": "Prediction Result",
-        "explanation": "XAI Explanation",
+        "explanation": "XAI Explanation (SHAP)",
+        "lime_title": "XAI Explanation (LIME)",
         "recommendations": "Farmer Recommendations",
         "temp": "Temperature",
         "rainfall": "Rainfall",
@@ -135,7 +148,8 @@ languages = {
         "weather": "लाइव मौसम डेटा",
         "soil": "मिट्टी स्वास्थ्य डेटा",
         "result": "भविष्यवाणी परिणाम",
-        "explanation": "XAI व्याख्या",
+        "explanation": "XAI व्याख्या (SHAP)",
+        "lime_title": "XAI व्याख्या (LIME)",
         "recommendations": "किसान सिफारिशें",
         "temp": "तापमान",
         "rainfall": "वर्षा",
@@ -154,7 +168,8 @@ languages = {
         "weather": "நேரடி வானிலை தரவு",
         "soil": "மண் ஆரோக்கிய தரவு",
         "result": "கணிப்பு முடிவு",
-        "explanation": "XAI விளக்கம்",
+        "explanation": "XAI விளக்கம் (SHAP)",
+        "lime_title": "XAI விளக்கம் (LIME)",
         "recommendations": "விவசாயி பரிந்துரைகள்",
         "temp": "வெப்பநிலை",
         "rainfall": "மழைப்பொழிவு",
@@ -173,7 +188,8 @@ languages = {
         "weather": "లైవ్ వాతావరణ డేటా",
         "soil": "నేల ఆరోగ్య డేటా",
         "result": "అంచనా ఫలితం",
-        "explanation": "XAI వివరణ",
+        "explanation": "XAI వివరణ (SHAP)",
+        "lime_title": "XAI వివరణ (LIME)",
         "recommendations": "రైతు సిఫార్సులు",
         "temp": "ఉష్ణోగ్రత",
         "rainfall": "వర్షపాతం",
@@ -192,7 +208,8 @@ languages = {
         "weather": "ನೇರ ಹವಾಮಾನ ಡೇಟಾ",
         "soil": "ಮಣ್ಣಿನ ಆರೋಗ್ಯ ಡೇಟಾ",
         "result": "ಮುನ್ಸೂಚನಾ ಫಲಿತಾಂಶ",
-        "explanation": "XAI ವಿವರಣೆ",
+        "explanation": "XAI ವಿವರಣೆ (SHAP)",
+        "lime_title": "XAI ವಿವರಣೆ (LIME)",
         "recommendations": "ರೈತ ಶಿಫಾರಸುಗಳು",
         "temp": "ತಾಪಮಾನ",
         "rainfall": "ಮಳೆ",
@@ -203,9 +220,12 @@ languages = {
     }
 }
 
-with st.spinner("🤖 Loading AI Model... Please wait 2 minutes"):
-    model, le_crop, le_country, explainer = load_models()
+# Load everything
+with st.spinner("🤖 Loading AI Model... Please wait"):
+    model, le_crop, le_country, explainer, \
+    lime_explainer, X_train = load_models()
 
+# Sidebar
 st.sidebar.title("🌐 Language")
 selected_lang = st.sidebar.selectbox(
     "Select Language", list(languages.keys()))
@@ -215,11 +235,17 @@ st.sidebar.markdown("### 📊 Model Info")
 st.sidebar.success("✅ Random Forest")
 st.sidebar.metric("Accuracy (R²)", "0.9857")
 st.sidebar.metric("RMSE", "10,189")
+st.sidebar.markdown("---")
+st.sidebar.markdown("### 🔍 XAI Methods")
+st.sidebar.info("SHAP — Global Explanation")
+st.sidebar.info("LIME — Local Explanation")
 
+# Title
 st.title(lang["title"])
 st.subheader(lang["subtitle"])
 st.markdown("---")
 
+# Input
 crops = [
     "Maize", "Potatoes", "Rice, paddy",
     "Sorghum", "Soybeans", "Wheat",
@@ -253,6 +279,7 @@ if st.button(lang["predict"],
         else:
             soil = get_soil(weather["latitude"])
 
+            # Weather and Soil
             col1, col2 = st.columns(2)
             with col1:
                 st.subheader(f"📡 {lang['weather']}")
@@ -273,18 +300,13 @@ if st.button(lang["predict"],
 
             st.markdown("---")
 
-            if crop in le_crop.classes_:
-                crop_enc = le_crop.transform([crop])[0]
-            else:
-                crop_enc = 0
-
+            # Prepare input
+            crop_enc = le_crop.transform([crop])[0] \
+                if crop in le_crop.classes_ else 0
             country = weather["country"]
-            if country in le_country.classes_:
-                country_enc = le_country.transform(
-                              [country])[0]
-            else:
-                country_enc = 0
-
+            country_enc = le_country.transform(
+                [country])[0] \
+                if country in le_country.classes_ else 0
             annual_rain = weather["rainfall"] * 365
             if annual_rain == 0:
                 annual_rain = 800
@@ -295,9 +317,11 @@ if st.button(lang["predict"],
                 weather["temperature"]
             ]])
 
+            # Predict
             predicted = model.predict(input_data)[0]
             predicted_tons = predicted / 10000
 
+            # Result
             st.subheader(f"📊 {lang['result']}")
             r1, r2, r3 = st.columns(3)
             r1.metric(lang["yield"],
@@ -307,29 +331,108 @@ if st.button(lang["predict"],
 
             st.markdown("---")
 
+            # ─────────────────────────────
+            # SHAP Explanation
+            # ─────────────────────────────
             st.subheader(f"🔍 {lang['explanation']}")
+            st.caption(
+                "SHAP shows which factors "
+                "influenced this prediction globally")
+
             shap_vals = explainer.shap_values(input_data)
             feature_names = [
                 "Crop Type", "Country", "Year",
                 "Rainfall", "Pesticides", "Temperature"
             ]
+
             fig, ax = plt.subplots(figsize=(10, 4))
             colors = ["green" if v > 0 else "red"
                      for v in shap_vals[0]]
             ax.barh(feature_names, shap_vals[0],
                    color=colors, alpha=0.8,
                    edgecolor='black')
-            ax.set_xlabel("SHAP Value (Impact on Yield)")
-            ax.set_title("XAI: Why this prediction?",
-                        fontweight="bold")
-            ax.axvline(x=0, color="black", linewidth=0.8)
+            ax.set_xlabel(
+                "SHAP Value (Impact on Yield hg/ha)")
+            ax.set_title(
+                "XAI (SHAP): Why this yield "
+                "was predicted?",
+                fontweight="bold")
+            ax.axvline(x=0, color="black",
+                      linewidth=0.8)
+
+            for i, v in enumerate(shap_vals[0]):
+                label = f"+{v:.0f}" if v > 0 \
+                        else f"{v:.0f}"
+                ax.text(v, i, label,
+                       va='center',
+                       fontsize=9,
+                       fontweight='bold')
             plt.tight_layout()
             st.pyplot(fig)
 
+            # SHAP explanation in text
+            st.markdown("**What this means:**")
+            for feat, val in zip(feature_names,
+                                 shap_vals[0]):
+                if val > 0:
+                    st.success(
+                        f"✅ {feat} increases yield "
+                        f"by {abs(val):.0f} hg/ha")
+                else:
+                    st.error(
+                        f"❌ {feat} decreases yield "
+                        f"by {abs(val):.0f} hg/ha")
+
             st.markdown("---")
 
-            st.subheader(f"✅ {lang['recommendations']}")
-            rec1, rec2, rec3 = st.columns(3)
+            # ─────────────────────────────
+            # LIME Explanation
+            # ─────────────────────────────
+            st.subheader(f"🔬 {lang['lime_title']}")
+            st.caption(
+                "LIME explains this specific "
+                "farmer's prediction locally")
+
+            with st.spinner("Generating LIME explanation..."):
+                lime_exp = lime_explainer.explain_instance(
+                    data_row=input_data[0],
+                    predict_fn=model.predict,
+                    num_features=6
+                )
+
+            fig2 = lime_exp.as_pyplot_figure()
+            plt.title(
+                "XAI (LIME): Local Explanation "
+                "for This Specific Prediction",
+                fontweight="bold",
+                fontsize=11)
+            plt.tight_layout()
+            st.pyplot(fig2)
+
+            # LIME in text
+            st.markdown("**Personalized explanation:**")
+            for feature, importance in \
+                    lime_exp.as_list():
+                if importance > 0:
+                    st.success(
+                        f"✅ {feature} → "
+                        f"increases yield by "
+                        f"{abs(importance):.0f}")
+                else:
+                    st.error(
+                        f"❌ {feature} → "
+                        f"decreases yield by "
+                        f"{abs(importance):.0f}")
+
+            st.markdown("---")
+
+            # ─────────────────────────────
+            # Recommendations
+            # ─────────────────────────────
+            st.subheader(
+                f"✅ {lang['recommendations']}")
+
+            rec1, rec2, rec3, rec4 = st.columns(4)
 
             with rec1:
                 st.markdown("### 🌡️ Temperature")
@@ -337,14 +440,17 @@ if st.button(lang["predict"],
                     st.error("Too HIGH ⚠️")
                     st.write("→ Irrigate more")
                     st.write("→ Use shade nets")
+                    st.write("→ Avoid afternoon work")
                 elif weather["temperature"] < 15:
                     st.warning("Too LOW ⚠️")
                     st.write("→ Delay planting")
                     st.write("→ Use crop covers")
+                    st.write("→ Protect seedlings")
                 else:
                     st.success("OPTIMAL ✅")
                     st.write("→ Good for planting")
                     st.write("→ Normal irrigation")
+                    st.write("→ Monitor weekly")
 
             with rec2:
                 st.markdown("### 🌧️ Irrigation")
@@ -352,10 +458,12 @@ if st.button(lang["predict"],
                     st.warning("Low Rainfall")
                     st.write("→ Irrigate 2x/week")
                     st.write("→ Check moisture daily")
+                    st.write("→ Drip irrigation ideal")
                 else:
                     st.success("Adequate ✅")
                     st.write("→ Monitor drainage")
                     st.write("→ Normal schedule")
+                    st.write("→ Check for waterlog")
 
             with rec3:
                 st.markdown("### 🌿 Fertilizer")
@@ -363,9 +471,90 @@ if st.button(lang["predict"],
                     st.warning("Acidic Soil")
                     st.write("→ Add lime")
                     st.write("→ 2-3 bags/acre")
+                    st.write("→ Retest after 2 weeks")
                 elif soil["ph"] > 7.5:
                     st.warning("Alkaline Soil")
                     st.write("→ Add sulfur")
+                    st.write("→ Increase irrigation")
+                    st.write("→ Use acidic fertilizer")
                 else:
                     st.success("pH Optimal ✅")
                     st.write("→ Add urea 25kg/acre")
+                    st.write("→ NPK balanced dose")
+                    st.write("→ Apply after rain")
+
+            with rec4:
+                st.markdown("### 🐛 Pest Control")
+                if weather["temperature"] > 28 and \
+                   weather["humidity"] > 70:
+                    st.error("HIGH RISK ⚠️")
+                    st.write("→ Spray neem oil")
+                    st.write("→ Check crops daily")
+                    st.write("→ Use pheromone traps")
+                elif weather["temperature"] > 25:
+                    st.warning("MEDIUM RISK")
+                    st.write("→ Monitor weekly")
+                    st.write("→ Preventive spray")
+                    st.write("→ Remove infected parts")
+                else:
+                    st.success("LOW RISK ✅")
+                    st.write("→ Monthly inspection")
+                    st.write("→ Normal monitoring")
+                    st.write("→ Record observations")
+
+            # Crop specific pest advice
+            st.markdown("---")
+            st.markdown("### 🌾 Crop Specific Advice")
+            ca1, ca2 = st.columns(2)
+            with ca1:
+                if crop in ["Rice, paddy",
+                           "Wheat", "Maize",
+                           "Sorghum"]:
+                    st.info(f"**{crop} — Cereal Crop**")
+                    st.write("→ Watch for stem borer")
+                    st.write("→ Use pheromone traps")
+                    st.write(
+                        "→ Spray in early morning")
+                elif crop in ["Soybeans",
+                             "Potatoes",
+                             "Sweet potatoes"]:
+                    st.info(
+                        f"**{crop} — Root/Legume**")
+                    st.write("→ Watch for aphids")
+                    st.write("→ Check leaves weekly")
+                    st.write("→ Use sticky traps")
+                else:
+                    st.info(
+                        f"**{crop} — Plantation**")
+                    st.write("→ General monitoring")
+                    st.write("→ Contact local KVK")
+                    st.write("→ Follow state advisory")
+
+            with ca2:
+                if weather["rainfall"] > 5:
+                    st.warning(
+                        "🌧️ Rain detected today")
+                    st.write(
+                        "→ Delay pesticide spray")
+                    st.write(
+                        "→ Wait 2 days after rain")
+                    st.write(
+                        "→ Reapply if washed off")
+                else:
+                    st.success(
+                        "☀️ Good day to spray!")
+                    st.write(
+                        "→ Spray 6AM-8AM only")
+                    st.write(
+                        "→ Avoid afternoon heat")
+                    st.write(
+                        "→ Use protective gear")
+
+# Footer
+st.markdown("---")
+st.markdown(
+    "🌾 **AI Crop Yield Prediction System** | "
+    "Random Forest + SHAP + LIME XAI | "
+    "IEEE Research Project | "
+    "Powered by Open-Meteo Weather API"
+)
