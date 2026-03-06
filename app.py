@@ -369,22 +369,3 @@ if st.button(lang["predict"],
                 else:
                     st.success("pH Optimal ✅")
                     st.write("→ Add urea 25kg/acre")
-
-st.markdown("---")
-st.markdown(
-    "🌾 **AI Crop Yield Prediction** | "
-    "Random Forest + SHAP XAI | "
-    "IEEE Research Project"
-)
-```
-
----
-
-### After Pasting in GitHub
-```
-1. Scroll down
-2. Click "Commit changes"
-3. Click "Commit changes" again
-4. Go to Streamlit
-5. App redeploys automatically
-6. Wait 3-5 minutes
