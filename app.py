@@ -1403,11 +1403,6 @@ if predict_btn:
 st.markdown("""
 <div class='footer'>
     🌾 CropAI — AI-Powered Crop Yield Prediction System
-    &nbsp;|&nbsp;
-    Random Forest + SHAP + LIME XAI
-    &nbsp;|&nbsp;
-    Live Weather via Open-Meteo API
-    &nbsp;|&nbsp;
-    IEEE Research Project
+    &nbsp;
 </div>
 """, unsafe_allow_html=True)
