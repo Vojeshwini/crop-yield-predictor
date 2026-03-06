@@ -1329,20 +1329,40 @@ if predict_btn:
             st.pyplot(fig_s)
             plt.close()
 
-            st.markdown("### 📋 Plain English Explanation:")
+            st.markdown("### 📋 What Each Factor Means — Plain English:")
+
+            # Emoji icons per feature for visual clarity
+            feat_icons = {
+                "Crop Type":   "🌾",
+                "Country":     "🗺️",
+                "Year":        "📅",
+                "Rainfall":    "🌧️",
+                "Pesticides":  "🐛",
+                "Temperature": "🌡️",
+            }
+
             for feat, val in sorted(
                     zip(feature_names, shap_vals[0]),
                     key=lambda x: abs(x[1]), reverse=True):
-                meaning = get_shap_meaning(feat, val)
-                css     = "shap-positive" if val > 0 else "shap-negative"
-                icon    = "✅" if val > 0 else "❌"
-                dirn    = "INCREASES" if val > 0 else "DECREASES"
+
+                meaning  = get_shap_meaning(feat, val)
+                css      = "shap-positive" if val > 0 else "shap-negative"
+                icon     = "✅" if val > 0 else "❌"
+                dirn     = "increases" if val > 0 else "decreases"
+                arrow    = "↑" if val > 0 else "↓"
+                femoji   = feat_icons.get(feat, "📊")
+                tons_val = abs(val) / 10000
+
+                # Rank label — biggest factor gets a crown
                 st.markdown(f"""
                 <div class='{css}'>
-                    <div class='shap-feature-name'>{icon} {feat}</div>
+                    <div class='shap-feature-name'>
+                        {icon} {femoji} {feat}
+                    </div>
                     <div class='shap-value'>
-                        {dirn} yield by {abs(val):.0f} hg/ha
-                        = {abs(val)/10000:.3f} tons/ha
+                        {arrow} This factor {dirn} your yield by
+                        <b>{abs(val):.0f} hg/ha
+                        ({tons_val:.3f} tons/ha)</b>
                     </div>
                     <div class='shap-meaning'>💡 {meaning}</div>
                 </div>
@@ -1388,68 +1408,197 @@ if predict_btn:
             st.pyplot(fig_l)
             plt.close()
 
-            lc1, lc2 = st.columns(2)
-            for i, (feature, importance) in enumerate(lime_exp.as_list()):
-                with lc1 if i % 2 == 0 else lc2:
+            # ── LIME Plain English Translator ──
+            # LIME returns raw conditions like "Crop Type <= 3.00"
+            # or "591.00 < Rainfall <= 1083.00" which are confusing.
+            # This translator converts them into farmer-friendly language.
+
+            def translate_lime_feature(raw_feature, importance, crop,
+                                       weather, soil):
+                """
+                Converts LIME's raw feature condition strings into
+                plain English sentences a farmer can understand.
+
+                LIME internally encodes:
+                  - Crop Type as numbers  (0–9)
+                  - Country as numbers    (0–100+)
+                  - Year as actual year
+                  - Rainfall as mm/year
+                  - Pesticides as tonnes
+                  - Temperature as °C
+                """
+                feat = raw_feature.lower()
+                imp  = abs(importance)
+                tons = imp / 10000
+                direction = "increases" if importance > 0 else "decreases"
+                arrow     = "↑" if importance > 0 else "↓"
+                tip_pos   = "✅ This is currently working in your favour."
+                tip_neg   = "⚠️ Improving this could boost your yield."
+
+                # ── Crop Type ──
+                if "crop" in feat:
+                    name = f"**{crop}** (your selected crop)"
                     if importance > 0:
-                        st.success(
-                            f"✅ **{feature}**\n\n"
-                            f"↑ Increases yield by **{abs(importance):.0f} hg/ha**\n\n"
-                            f"💡 This factor is helping your yield")
+                        return (
+                            f"🌾 **Crop Type — {crop}**",
+                            f"{arrow} {direction.capitalize()} yield by "
+                            f"**{imp:.0f} hg/ha ({tons:.2f} tons/ha)**",
+                            f"{tip_pos} {crop} is well suited to the current "
+                            f"weather and regional conditions. "
+                            f"It is the biggest positive factor in your prediction."
+                        )
                     else:
-                        st.error(
-                            f"❌ **{feature}**\n\n"
-                            f"↓ Decreases yield by **{abs(importance):.0f} hg/ha**\n\n"
-                            f"💡 Improving this can boost your yield")
+                        return (
+                            f"🌾 **Crop Type — {crop}**",
+                            f"{arrow} {direction.capitalize()} yield by "
+                            f"**{imp:.0f} hg/ha ({tons:.2f} tons/ha)**",
+                            f"{tip_neg} {crop} may not be ideal for current "
+                            f"conditions. Consider a different variety next season."
+                        )
 
-            st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
+                # ── Pesticides ──
+                elif "pesticide" in feat or "pestic" in feat:
+                    level = weather.get("humidity", 60)
+                    if importance > 0:
+                        return (
+                            f"🐛 **Pesticide / Crop Protection Level**",
+                            f"{arrow} {direction.capitalize()} yield by "
+                            f"**{imp:.0f} hg/ha ({tons:.2f} tons/ha)**",
+                            f"{tip_pos} Your current pest control level is "
+                            f"effectively protecting the crop from damage."
+                        )
+                    else:
+                        return (
+                            f"🐛 **Pesticide / Crop Protection Level**",
+                            f"{arrow} {direction.capitalize()} yield by "
+                            f"**{imp:.0f} hg/ha ({tons:.2f} tons/ha)**",
+                            f"{tip_neg} Pest control is below the optimal level. "
+                            f"Increasing protection can recover this yield loss. "
+                            f"See the Pest Control Optimization plan above."
+                        )
 
-            # ── General Recommendations ──
-            st.markdown(
-                f"<div class='sec-header'>✅ {lang['rec']}</div>",
-                unsafe_allow_html=True)
+                # ── Temperature ──
+                elif "temp" in feat:
+                    t = weather.get("temperature", 25)
+                    if importance > 0:
+                        return (
+                            f"🌡️ **Temperature — {t:.1f}°C (Live)**",
+                            f"{arrow} {direction.capitalize()} yield by "
+                            f"**{imp:.0f} hg/ha ({tons:.2f} tons/ha)**",
+                            f"{tip_pos} Today's temperature is within the "
+                            f"comfortable range for {crop}."
+                        )
+                    else:
+                        return (
+                            f"🌡️ **Temperature — {t:.1f}°C (Live)**",
+                            f"{arrow} {direction.capitalize()} yield by "
+                            f"**{imp:.0f} hg/ha ({tons:.2f} tons/ha)**",
+                            f"{tip_neg} Temperature is above the optimal range "
+                            f"for {crop}. Use shade nets and increase irrigation "
+                            f"during peak afternoon heat. "
+                            f"(Weather cannot be controlled, only managed.)"
+                        )
 
-            r1, r2, r3, r4 = st.columns(4)
-            t      = weather["temperature"]
-            rf_val = weather["rainfall"]
-            ph     = soil["ph"]
-            hum    = weather["humidity"]
+                # ── Rainfall / Irrigation ──
+                elif "rain" in feat or "rainfall" in feat:
+                    rf = weather.get("rainfall", 0)
+                    if importance > 0:
+                        return (
+                            f"🌧️ **Rainfall / Irrigation**",
+                            f"{arrow} {direction.capitalize()} yield by "
+                            f"**{imp:.0f} hg/ha ({tons:.2f} tons/ha)**",
+                            f"{tip_pos} Water availability is in a good range "
+                            f"for {crop} growth. "
+                            f"Today's rainfall: {rf:.1f}mm."
+                        )
+                    else:
+                        return (
+                            f"🌧️ **Rainfall / Irrigation**",
+                            f"{arrow} {direction.capitalize()} yield by "
+                            f"**{imp:.0f} hg/ha ({tons:.2f} tons/ha)**",
+                            f"{tip_neg} Water level is not in the optimal range. "
+                            f"Today's rainfall is {rf:.1f}mm. "
+                            f"Adjust irrigation as per the optimization plan above."
+                        )
 
-            with r1:
-                st.markdown("<p style='color:#1b5e20; font-size:0.85rem; font-weight:800; text-transform:uppercase'>🌡️ Temperature</p>", unsafe_allow_html=True)
-                if t > 30:
-                    st.markdown(f"<div class='rec-danger'><div class='rec-title'>⚠️ {t:.1f}°C — Too High</div><div class='rec-item'>→ Increase irrigation</div><div class='rec-item'>→ Install shade nets</div><div class='rec-item'>→ Avoid afternoon work</div></div>", unsafe_allow_html=True)
-                elif t < 15:
-                    st.markdown(f"<div class='rec-warn'><div class='rec-title'>⚠️ {t:.1f}°C — Too Low</div><div class='rec-item'>→ Delay planting</div><div class='rec-item'>→ Use crop covers</div><div class='rec-item'>→ Protect seedlings</div></div>", unsafe_allow_html=True)
+                # ── Country / Region ──
+                elif "country" in feat:
+                    region = soil.get("region", "your region")
+                    if importance > 0:
+                        return (
+                            f"🗺️ **Regional Conditions — {region}**",
+                            f"{arrow} {direction.capitalize()} yield by "
+                            f"**{imp:.0f} hg/ha ({tons:.2f} tons/ha)**",
+                            f"{tip_pos} Agricultural conditions and farming "
+                            f"practices in {region} are historically favourable "
+                            f"for {crop}."
+                        )
+                    else:
+                        return (
+                            f"🗺️ **Regional Conditions — {region}**",
+                            f"{arrow} {direction.capitalize()} yield by "
+                            f"**{imp:.0f} hg/ha ({tons:.2f} tons/ha)**",
+                            f"{tip_neg} This region has historically shown "
+                            f"lower yields for {crop}. "
+                            f"Follow local KVK advisory for region-specific tips."
+                        )
+
+                # ── Year ──
+                elif "year" in feat:
+                    if importance > 0:
+                        return (
+                            f"📅 **Year — {year}**",
+                            f"{arrow} {direction.capitalize()} yield by "
+                            f"**{imp:.0f} hg/ha ({tons:.2f} tons/ha)**",
+                            f"{tip_pos} Modern agricultural technology and "
+                            f"improved practices in {year} contribute positively. "
+                            f"(Smallest factor — minor influence.)"
+                        )
+                    else:
+                        return (
+                            f"📅 **Year — {year}**",
+                            f"{arrow} {direction.capitalize()} yield by "
+                            f"**{imp:.0f} hg/ha ({tons:.2f} tons/ha)**",
+                            f"Historical yield patterns show a slight reduction "
+                            f"for this period. Minor influence on prediction."
+                        )
+
+                # ── Fallback ──
                 else:
-                    st.markdown(f"<div class='rec-optimal'><div class='rec-title'>✅ {t:.1f}°C — Optimal</div><div class='rec-item'>→ Ideal conditions</div><div class='rec-item'>→ Normal irrigation</div><div class='rec-item'>→ Monitor weekly</div></div>", unsafe_allow_html=True)
+                    return (
+                        f"📊 **{raw_feature}**",
+                        f"{arrow} {direction.capitalize()} yield by "
+                        f"**{imp:.0f} hg/ha ({tons:.2f} tons/ha)**",
+                        tip_pos if importance > 0 else tip_neg
+                    )
 
-            with r2:
-                st.markdown("<p style='color:#1b5e20; font-size:0.85rem; font-weight:800; text-transform:uppercase'>🌧️ Irrigation</p>", unsafe_allow_html=True)
-                if rf_val < 2:
-                    st.markdown(f"<div class='rec-warn'><div class='rec-title'>⚠️ {rf_val:.1f}mm — Low</div><div class='rec-item'>→ Irrigate 2× per week</div><div class='rec-item'>→ Check daily moisture</div><div class='rec-item'>→ Drip irrigation</div></div>", unsafe_allow_html=True)
-                elif rf_val > 20:
-                    st.markdown(f"<div class='rec-danger'><div class='rec-title'>⚠️ {rf_val:.1f}mm — Heavy</div><div class='rec-item'>→ Ensure drainage</div><div class='rec-item'>→ Prevent waterlogging</div><div class='rec-item'>→ Delay spraying</div></div>", unsafe_allow_html=True)
-                else:
-                    st.markdown(f"<div class='rec-optimal'><div class='rec-title'>✅ {rf_val:.1f}mm — Adequate</div><div class='rec-item'>→ Monitor drainage</div><div class='rec-item'>→ Normal schedule</div><div class='rec-item'>→ Weekly check</div></div>", unsafe_allow_html=True)
+            # ── Display translated LIME cards ──
+            lc1, lc2 = st.columns(2)
+            for i, (raw_feature, importance) in enumerate(
+                    lime_exp.as_list()):
+                title, value_line, meaning = translate_lime_feature(
+                    raw_feature, importance, crop, weather, soil)
+                css   = "shap-positive" if importance > 0 else "shap-negative"
+                with lc1 if i % 2 == 0 else lc2:
+                    st.markdown(f"""
+                    <div class='{css}'>
+                        <div class='shap-feature-name'>{title}</div>
+                        <div class='shap-value'>{value_line}</div>
+                        <div class='shap-meaning'>💡 {meaning}</div>
+                    </div>
+                    """, unsafe_allow_html=True)
 
-            with r3:
-                st.markdown("<p style='color:#1b5e20; font-size:0.85rem; font-weight:800; text-transform:uppercase'>🌿 Fertilizer</p>", unsafe_allow_html=True)
-                if ph < 6.0:
-                    st.markdown(f"<div class='rec-warn'><div class='rec-title'>⚠️ pH {ph} — Acidic</div><div class='rec-item'>→ Add lime 2-3 bags/acre</div><div class='rec-item'>→ Retest after 2 weeks</div><div class='rec-item'>→ Use phosphate</div></div>", unsafe_allow_html=True)
-                elif ph > 7.5:
-                    st.markdown(f"<div class='rec-warn'><div class='rec-title'>⚠️ pH {ph} — Alkaline</div><div class='rec-item'>→ Add sulfur</div><div class='rec-item'>→ Acidic fertilizers</div><div class='rec-item'>→ Increase irrigation</div></div>", unsafe_allow_html=True)
-                else:
-                    st.markdown(f"<div class='rec-optimal'><div class='rec-title'>✅ pH {ph} — Optimal</div><div class='rec-item'>→ Urea 25 kg/acre</div><div class='rec-item'>→ Balanced NPK</div><div class='rec-item'>→ Apply after rain</div></div>", unsafe_allow_html=True)
-
-            with r4:
-                st.markdown("<p style='color:#1b5e20; font-size:0.85rem; font-weight:800; text-transform:uppercase'>🐛 Pest Control</p>", unsafe_allow_html=True)
-                if t > 28 and hum > 70:
-                    st.markdown("<div class='rec-danger'><div class='rec-title'>🔴 HIGH RISK</div><div class='rec-item'>→ Neem oil weekly</div><div class='rec-item'>→ Pheromone traps</div><div class='rec-item'>→ Daily inspection</div></div>", unsafe_allow_html=True)
-                elif t > 25:
-                    st.markdown("<div class='rec-warn'><div class='rec-title'>🟡 MEDIUM RISK</div><div class='rec-item'>→ Weekly monitoring</div><div class='rec-item'>→ Preventive spray</div><div class='rec-item'>→ Remove infected</div></div>", unsafe_allow_html=True)
-                else:
-                    st.markdown("<div class='rec-optimal'><div class='rec-title'>🟢 LOW RISK</div><div class='rec-item'>→ Monthly check</div><div class='rec-item'>→ Standard monitoring</div><div class='rec-item'>→ Record data</div></div>", unsafe_allow_html=True)
+            # ── COMMENTED OUT: General Recommendations ──
+            # Reason: Fully covered by the 4-Parameter Optimization section above.
+            # Uncomment below if you want a standalone quick-summary card
+            # without the optimizer (e.g. for a simpler demo mode).
+            #
+            # st.markdown(f"<div class='sec-header'>✅ {lang['rec']}</div>", ...)
+            # r1, r2, r3, r4 = st.columns(4)
+            # with r1: Temperature card (optimal / too high / too low)
+            # with r2: Irrigation card  (adequate / low / heavy)
+            # with r3: Fertilizer card  (optimal / acidic / alkaline)
+            # with r4: Pest Control card (low / medium / high risk)
 
             st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
 
