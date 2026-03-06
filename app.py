@@ -499,237 +499,182 @@ def get_shap_meaning(feature, shap_val):
 
 def generate_pdf(city, crop, year, weather, soil,
                  predicted_tons, shap_vals, feature_names,
-                 lime_exp, opt, pest_plan):
+                 lime_exp, opt, pest_plan, lang):
     buf = io.BytesIO()
     with PdfPages(buf) as pdf:
 
-        # ── PAGE 1: Summary ──
+        # ─── PAGE 1: Summary ───
         fig, ax = plt.subplots(figsize=(11.69, 8.27))
         fig.patch.set_facecolor('#f1f8e9')
         ax.set_facecolor('#f1f8e9')
         ax.axis('off')
 
-        ax.add_patch(plt.Rectangle((0, 0.88), 1, 0.12,
+        # Header
+        ax.add_patch(plt.Rectangle((0, 0.92), 1, 0.08,
             transform=ax.transAxes, facecolor='#1b5e20', clip_on=False))
-        ax.text(0.5, 0.945,
-               '🌾  CropAI — Yield Prediction & 4-Parameter Optimization Report',
-               ha='center', va='center', fontsize=14,
+        ax.text(0.5, 0.963, lang['pdf_title'],
+               ha='center', va='center', fontsize=12,
                fontweight='bold', color='white', transform=ax.transAxes)
-        ax.text(0.5, 0.895,
-               f'Location: {city}   |   Crop: {crop}   |   Year: {year}',
-               ha='center', va='center', fontsize=10,
+        ax.text(0.5, 0.930, f'{city}   |   {crop}   |   {year}',
+               ha='center', va='center', fontsize=9,
                color='#a5d6a7', transform=ax.transAxes)
 
-        # Current vs Optimized boxes
+        # Row 1: yield boxes
         for i, (label, val, color) in enumerate([
-            ('CURRENT YIELD', f'{predicted_tons:.2f} tons/ha', '#2e7d32'),
-            (f'OPTIMIZED YIELD (+{opt["improvement_pct"]:.1f}%)',
-             f'{opt["optimized_yield"]:.2f} tons/ha', '#1565c0')
+            (lang['pdf_curr'], f'{predicted_tons:.2f} tons/ha', '#2e7d32'),
+            (f"{lang['pdf_opt']} (+{opt['improvement_pct']:.1f}%)",
+             f"{opt['optimized_yield']:.2f} tons/ha", '#1565c0')
         ]):
-            x = 0.02 + i * 0.51
+            x = 0.03 + i * 0.50
             ax.add_patch(mpatches.FancyBboxPatch(
-                (x, 0.68), 0.46, 0.17,
-                boxstyle="round,pad=0.02",
+                (x, 0.74), 0.44, 0.14, boxstyle="round,pad=0.01",
                 facecolor=color, transform=ax.transAxes))
-            ax.text(x+0.23, 0.78, val, ha='center', va='center',
-                   fontsize=17, fontweight='bold', color='white',
+            ax.text(x+0.22, 0.82, val, ha='center', va='center',
+                   fontsize=15, fontweight='bold', color='white',
                    transform=ax.transAxes)
-            ax.text(x+0.23, 0.695, label, ha='center', va='center',
-                   fontsize=8, color='#e0e0e0', transform=ax.transAxes)
+            ax.text(x+0.22, 0.752, label, ha='center', va='center',
+                   fontsize=7.5, color='#e0e0e0', transform=ax.transAxes)
 
-        # 4 optimization actions
-        ax.text(0.03, 0.65, 'OPTIMIZATION ACTIONS (4 Parameters Optimized)',
+        # Row 2: optimization actions box
+        ax.add_patch(mpatches.FancyBboxPatch(
+            (0.03, 0.57), 0.94, 0.15, boxstyle="round,pad=0.01",
+            facecolor='#e3f2fd', edgecolor='#90caf9',
+            transform=ax.transAxes))
+        ax.text(0.05, 0.708, lang['pdf_opt_actions'],
                fontsize=8, fontweight='bold', color='#1565c0',
                transform=ax.transAxes)
-
         rain_diff = opt['best_rainfall_mm'] - opt['current_rainfall']
         pest_diff = opt['best_pesticides'] - opt['current_pesticides']
+        for i, line in enumerate([
+            f"  IRRIGATION: {opt['current_rainfall']:.0f}mm -> {opt['best_rainfall_mm']:.0f}mm  ({'Increase' if rain_diff>0 else 'Reduce'} by {abs(rain_diff):.0f}mm)",
+            f"  PEST CONTROL: {opt['current_pesticides']:.0f}t -> {opt['best_pesticides']:.0f}t  | Risk: {pest_plan['risk']}  | {pest_plan['frequency']}",
+            f"  FERTILIZER: pH {soil['ph']}  | {opt['fert_status']}  | {opt['fert_action'][:65]}",
+            f"  TOTAL: +{opt['improvement_pct']:.1f}% improvement  ({'EXCEEDS' if opt['improvement_pct']>=10 else 'APPROACHES'} 10% target)",
+        ]):
+            ax.text(0.05, 0.685 - i*0.028, line,
+                   fontsize=7.8, color='#0d47a1', transform=ax.transAxes)
 
-        opt_lines = [
-            f"💧 IRRIGATION: Target {opt['best_rainfall_mm']:.0f}mm/year "
-            f"({'↑ Increase' if rain_diff>0 else '↓ Reduce'} by {abs(rain_diff):.0f}mm)",
-            f"🐛 PEST CONTROL: Optimize to {opt['best_pesticides']:.0f} tonnes — "
-            f"Risk Level: {pest_plan['risk']} — {pest_plan['frequency']} treatment",
-            f"🌿 FERTILIZER: {opt['fert_status']} — {opt['fert_action']} "
-            f"(Expected: {opt['fert_impact']} improvement)",
-            f"📈 TOTAL IMPROVEMENT: +{opt['improvement_pct']:.1f}% yield increase "
-            f"— {'✅ EXCEEDS' if opt['improvement_pct']>=10 else '📈 APPROACHES'} 10% target",
-        ]
-        for i, line in enumerate(opt_lines):
-            ax.text(0.03, 0.62 - i*0.05, line,
-                   fontsize=8.5, color='#0d47a1',
-                   transform=ax.transAxes)
-
-        # Weather + Soil
-        for i, (title, vals) in enumerate([
-            ('LIVE WEATHER', [
-                f"Temp: {weather['temperature']:.1f}°C",
-                f"Rain: {weather['rainfall']:.1f}mm",
+        # Row 3: weather + soil boxes
+        for col_i, (title, items) in enumerate([
+            (lang['pdf_weather'], [
+                f"Temperature: {weather['temperature']:.1f}C",
+                f"Rainfall: {weather['rainfall']:.1f} mm",
                 f"Humidity: {weather['humidity']:.0f}%"]),
-            ('SOIL HEALTH', [
+            (lang['pdf_soil'], [
                 f"Nitrogen: {soil['nitrogen']} g/kg",
-                f"pH: {soil['ph']}",
+                f"Soil pH: {soil['ph']}",
                 f"Region: {soil['region']}"])
         ]):
-            x = 0.03 + i * 0.5
-            ax.text(x, 0.40, title, fontsize=8,
-                   fontweight='bold', color='#2e7d32',
-                   transform=ax.transAxes)
+            x = 0.03 + col_i * 0.50
             ax.add_patch(mpatches.FancyBboxPatch(
-                (x, 0.28), 0.44, 0.10,
-                boxstyle="round,pad=0.01",
+                (x, 0.38), 0.44, 0.17, boxstyle="round,pad=0.01",
                 facecolor='white', edgecolor='#c8e6c9',
                 transform=ax.transAxes))
-            for j, v in enumerate(vals):
-                ax.text(x+0.02, 0.36 - j*0.03, f"• {v}",
-                       fontsize=9.5, color='#1b5e20',
+            ax.text(x+0.02, 0.535, title,
+                   fontsize=8, fontweight='bold', color='#2e7d32',
+                   transform=ax.transAxes)
+            for row_i, item in enumerate(items):
+                ax.text(x+0.03, 0.510 - row_i*0.038,
+                       f"• {item}", fontsize=8.5, color='#1b5e20',
                        transform=ax.transAxes)
 
-        ax.text(0.03, 0.26, 'PEST CONTROL PLAN',
-               fontsize=8, fontweight='bold',
-               color='#b71c1c', transform=ax.transAxes)
-        for i, step in enumerate(pest_plan['plan'][:3]):
-            ax.text(0.03, 0.23 - i*0.04, f"• {step}",
-                   fontsize=8.5, color='#b71c1c',
-                   transform=ax.transAxes)
+        # Row 4: pest plan box
+        ax.add_patch(mpatches.FancyBboxPatch(
+            (0.03, 0.20), 0.94, 0.16, boxstyle="round,pad=0.01",
+            facecolor='#fce4ec', edgecolor='#f48fb1',
+            transform=ax.transAxes))
+        ax.text(0.05, 0.348, lang['pdf_pest'],
+               fontsize=8, fontweight='bold', color='#b71c1c',
+               transform=ax.transAxes)
+        for i, step in enumerate(pest_plan['plan'][:4]):
+            ax.text(0.05, 0.325 - i*0.030, f"• {step}",
+                   fontsize=8, color='#b71c1c', transform=ax.transAxes)
 
-        ax.text(0.5, 0.01,
-               'CropAI  |  Random Forest + SHAP + LIME + 4-Parameter Optimization  |  IEEE Research Project',
-               ha='center', fontsize=7.5, color='#666666',
+        ax.text(0.5, 0.12, lang['pdf_footer'],
+               ha='center', fontsize=7, color='#666666',
                transform=ax.transAxes)
         pdf.savefig(fig, bbox_inches='tight')
         plt.close()
 
-        # ── PAGE 2: Optimization Chart ──
-        fig2, axes = plt.subplots(1, 2, figsize=(11.69, 8.27))
+        # ─── PAGE 2: Optimization Chart ───
+        fig2, ax2 = plt.subplots(figsize=(11.69, 8.27))
         fig2.patch.set_facecolor('#e3f2fd')
-
-        # Left: yield comparison bar
-        ax2 = axes[0]
         ax2.set_facecolor('#e3f2fd')
-        cats   = ['Current\nYield', 'Optimized\nYield', 'Improvement']
-        vals   = [predicted_tons, opt['optimized_yield'],
-                  opt['improvement_tons']]
-        cols   = ['#2e7d32', '#1565c0', '#f57f17']
-        bars2  = ax2.bar(cats, vals, color=cols,
-                         alpha=0.85, edgecolor='white', width=0.5)
-        for bar, val in zip(bars2, vals):
-            ax2.text(bar.get_x() + bar.get_width()/2,
-                    bar.get_height() + max(vals)*0.02,
-                    f'{val:.2f}', ha='center',
+        cats = [f'Current\n({predicted_tons:.2f} t/ha)',
+                f'Optimized\n({opt["optimized_yield"]:.2f} t/ha)',
+                f'Improvement\n(+{opt["improvement_tons"]:.2f} t/ha)']
+        vals2 = [predicted_tons, opt['optimized_yield'], opt['improvement_tons']]
+        bars2 = ax2.bar(cats, vals2, color=['#2e7d32','#1565c0','#f57f17'],
+                        alpha=0.85, edgecolor='white', width=0.5)
+        for bar, val in zip(bars2, vals2):
+            ax2.text(bar.get_x()+bar.get_width()/2,
+                    bar.get_height()+max(vals2)*0.02,
+                    f'{val:.2f} t/ha', ha='center', va='bottom',
                     fontsize=12, fontweight='bold', color='#1b5e20')
-        ax2.axhline(y=predicted_tons*1.10,
-                   color='#f44336', linewidth=2.5,
+        ax2.axhline(y=predicted_tons*1.10, color='#f44336', linewidth=2.5,
                    linestyle='--', alpha=0.8,
-                   label='10% Target')
-        ax2.legend(fontsize=10)
-        ax2.set_ylabel('Yield (tons/ha)', fontsize=11,
-                      color='#1b5e20', fontweight='bold')
-        ax2.set_title('Yield Optimization Result',
-                     fontsize=13, fontweight='bold', color='#1b5e20')
-        ax2.tick_params(colors='#1b5e20', labelsize=10)
-        for sp in ['bottom', 'left']:
-            ax2.spines[sp].set_color('#90caf9')
-            ax2.spines[sp].set_linewidth(2)
-        ax2.spines['top'].set_visible(False)
-        ax2.spines['right'].set_visible(False)
-
-        # Right: 4-parameter summary
-        ax3 = axes[1]
-        ax3.axis('off')
-        ax3.set_facecolor('#e3f2fd')
-        params = [
-            ('💧 Irrigation',
-             f"{opt['current_rainfall']:.0f}mm → {opt['best_rainfall_mm']:.0f}mm",
-             '#1565c0'),
-            ('🐛 Pest Control',
-             f"Level: {opt['current_pesticides']:.0f}t → {opt['best_pesticides']:.0f}t",
-             '#b71c1c'),
-            ('🌿 Fertilizer',
-             f"pH {soil['ph']} — {opt['fert_status']}",
-             '#2e7d32'),
-            ('📈 Total Gain',
-             f"+{opt['improvement_pct']:.1f}% improvement",
-             '#e65100'),
-        ]
-        ax3.text(0.5, 0.95,
-                '4-Parameter Optimization Summary',
-                ha='center', fontsize=14,
-                fontweight='bold', color='#1b5e20',
-                transform=ax3.transAxes)
-        for i, (param, value, color) in enumerate(params):
-            y = 0.78 - i * 0.18
-            ax3.add_patch(mpatches.FancyBboxPatch(
-                (0.05, y-0.06), 0.90, 0.12,
-                boxstyle="round,pad=0.01",
-                facecolor=color, alpha=0.15,
-                edgecolor=color, linewidth=2,
-                transform=ax3.transAxes))
-            ax3.text(0.12, y, param,
-                    fontsize=12, fontweight='bold',
-                    color=color, transform=ax3.transAxes)
-            ax3.text(0.12, y-0.04, value,
-                    fontsize=10, color='#1a2e1a',
-                    transform=ax3.transAxes)
-
-        plt.tight_layout(pad=2)
+                   label=f'10% Target ({predicted_tons*1.10:.2f} t/ha)')
+        ax2.legend(fontsize=11)
+        ax2.set_ylabel('Yield (tons/ha)', fontsize=12, color='#1b5e20', fontweight='bold')
+        ax2.set_title(
+            f'Yield Optimization: {predicted_tons:.2f} -> {opt["optimized_yield"]:.2f} t/ha  (+{opt["improvement_pct"]:.1f}%)',
+            fontsize=13, fontweight='bold', color='#1b5e20', pad=15)
+        ax2.tick_params(colors='#1b5e20', labelsize=11)
+        for sp in ['bottom','left']:
+            ax2.spines[sp].set_color('#90caf9'); ax2.spines[sp].set_linewidth(2)
+        ax2.spines['top'].set_visible(False); ax2.spines['right'].set_visible(False)
+        plt.tight_layout(pad=3)
         pdf.savefig(fig2, bbox_inches='tight')
         plt.close()
 
-        # ── PAGE 3: SHAP ──
-        fig3, ax_s = plt.subplots(figsize=(11.69, 8.27))
+        # ─── PAGE 3: SHAP ───
+        fig3, ax3 = plt.subplots(figsize=(11.69, 8.27))
         fig3.patch.set_facecolor('#f9fbe7')
-        ax_s.set_facecolor('#f9fbe7')
-        colors_s = ['#43a047' if v > 0 else '#e53935'
-                   for v in shap_vals[0]]
-        bars_s = ax_s.barh(feature_names, shap_vals[0],
-                          color=colors_s, alpha=0.9,
-                          edgecolor='white', height=0.55)
-        ax_s.axvline(x=0, color='#333', linewidth=2, alpha=0.4)
-        ax_s.set_xlabel('SHAP Value (hg/ha)', fontsize=12,
-                       color='#1b5e20', fontweight='bold')
-        ax_s.set_title(
-            'XAI — SHAP: Global Feature Importance\n'
-            'Green = Increases Yield  |  Red = Decreases Yield',
-            fontsize=14, fontweight='bold', color='#1b5e20', pad=15)
-        ax_s.tick_params(colors='#1b5e20', labelsize=12)
-        for sp in ['bottom', 'left']:
-            ax_s.spines[sp].set_color('#a5d6a7')
-            ax_s.spines[sp].set_linewidth(2)
-        ax_s.spines['top'].set_visible(False)
-        ax_s.spines['right'].set_visible(False)
+        ax3.set_facecolor('#f9fbe7')
+        cols_s = ['#43a047' if v > 0 else '#e53935' for v in shap_vals[0]]
+        bars_s = ax3.barh(feature_names, shap_vals[0], color=cols_s,
+                         alpha=0.9, edgecolor='white', height=0.55)
+        ax3.axvline(x=0, color='#333', linewidth=2, alpha=0.4)
+        ax3.set_xlabel('SHAP Value (hg/ha)', fontsize=12, color='#1b5e20', fontweight='bold')
+        ax3.set_title('XAI - SHAP: Global Feature Importance\nGreen = Increases Yield  |  Red = Decreases Yield',
+                     fontsize=14, fontweight='bold', color='#1b5e20', pad=15)
+        ax3.tick_params(colors='#1b5e20', labelsize=12)
+        for sp in ['bottom','left']:
+            ax3.spines[sp].set_color('#a5d6a7'); ax3.spines[sp].set_linewidth(2)
+        ax3.spines['top'].set_visible(False); ax3.spines['right'].set_visible(False)
         for bar, val in zip(bars_s, shap_vals[0]):
             label = f"+{val:.0f}" if val > 0 else f"{val:.0f}"
-            ax_s.text(val, bar.get_y() + bar.get_height()/2,
-                     f"  {label}  ", va='center',
-                     ha='left' if val >= 0 else 'right',
-                     fontsize=11, fontweight='bold', color='#1b5e20')
-        plt.tight_layout(pad=2)
+            ax3.text(val, bar.get_y()+bar.get_height()/2,
+                    f"  {label}  ", va='center',
+                    ha='left' if val>=0 else 'right',
+                    fontsize=11, fontweight='bold', color='#1b5e20')
+        plt.tight_layout(pad=3)
         pdf.savefig(fig3, bbox_inches='tight')
         plt.close()
 
-        # ── PAGE 4: LIME ──
+        # ─── PAGE 4: LIME ───
         fig4 = lime_exp.as_pyplot_figure()
+        fig4.set_size_inches(11.69, 8.27)
         fig4.patch.set_facecolor('#f9fbe7')
         for a in fig4.get_axes():
             a.set_facecolor('#f9fbe7')
             a.tick_params(colors='#1b5e20', labelsize=10)
             a.xaxis.label.set_color('#1b5e20')
             a.xaxis.label.set_fontweight('bold')
-            for sp in ['bottom', 'left']:
+            for sp in ['bottom','left']:
                 a.spines[sp].set_color('#a5d6a7')
             a.spines['top'].set_visible(False)
             a.spines['right'].set_visible(False)
         fig4.suptitle(
-            f'XAI — LIME: Individual Prediction Explanation\n'
-            f'{city}  |  {crop}  |  {year}',
-            fontsize=14, fontweight='bold', color='#1b5e20')
-        plt.tight_layout(pad=1.5)
+            f'XAI - LIME: Individual Prediction Breakdown\n{city}  |  {crop}  |  {year}',
+            fontsize=14, fontweight='bold', color='#1b5e20', y=0.98)
+        plt.tight_layout(rect=[0, 0, 1, 0.93])
         pdf.savefig(fig4, bbox_inches='tight')
         plt.close()
 
     buf.seek(0)
     return buf
+
 
 # ─────────────────────────────────────────────────────
 # CITIES + LANGUAGES
@@ -768,8 +713,67 @@ languages = {
         "rec":      "Smart Farmer Recommendations",
         "download": "📥  Download Complete Report (PDF)",
         "temp": "Temperature", "rain": "Rainfall", "hum": "Humidity",
-        "n": "Nitrogen", "ph": "Soil pH", "yield": "Predicted Yield"
+        "n": "Nitrogen", "ph": "Soil pH", "yield": "Predicted Yield",
+        # SHAP card text
+        "shap_info_title": "XAI Method 1 of 2 — SHAP (Global Explanation)",
+        "shap_info": (
+            "<b>SHAP</b> (SHapley Additive exPlanations) analyses the entire "
+            "trained model across all 28,242 FAO crop records to determine how "
+            "much each input variable contributes to the yield prediction on average. "
+            "<b style='color:#2e7d32'>Green</b> = pushes yield higher. "
+            "<b style='color:#c62828'>Red</b> = reduces yield. "
+            "Bar length = strength of influence. This answers: "
+            "<i>\"Which factors matter most overall?\"</i>"
+        ),
+        "shap_breakdown": "Factor-by-factor breakdown — ranked by strength of influence:",
+        "positive_factor": "Positive Factor", "negative_factor": "Negative Factor",
+        "impact_label": "Impact",
+        # LIME card text
+        "lime_info_title": "XAI Method 2 of 2 — LIME (Individual Explanation)",
+        "lime_info": (
+            "<b>LIME</b> (Local Interpretable Model-agnostic Explanations) explains "
+            "<b>this specific prediction only</b>. It creates a simplified local "
+            "approximation around your exact input values. "
+            "<b>Why SHAP and LIME differ — and why that is correct:</b> SHAP measures "
+            "average influence across 28,242 records. LIME measures influence for your "
+            "farm's conditions today. Using both gives <b>complete XAI coverage</b> — "
+            "global model transparency and individual prediction transparency "
+            "(Ribeiro et al. 2016; Lundberg &amp; Lee 2017)."
+        ),
+        "lime_breakdown": "Factor-by-factor explanation for your specific prediction:",
+        "pos_contrib": "Positive contributor", "neg_contrib": "Yield-limiting factor",
+        # Optimization
+        "opt_info_title": "How does 4-Parameter Optimization work?",
+        "opt_info": (
+            "The AI optimizer tests <b>64 combinations</b> of all controllable "
+            "farm parameters simultaneously:<br><br>"
+            "&nbsp;&nbsp;💧 <b>Irrigation</b> — 8 rainfall levels tested<br>"
+            "&nbsp;&nbsp;🐛 <b>Pest Control</b> — 8 pesticide levels tested<br>"
+            "&nbsp;&nbsp;🌿 <b>Fertilizer</b> — soil pH analysis applied<br>"
+            "&nbsp;&nbsp;📈 <b>Productivity</b> — best combination selected"
+        ),
+        "target_achieved": "Problem Statement Target ACHIEVED!",
+        "target_text": "productivity improvement — exceeds the required ≥10% target ✅",
+        "opt_actions": "Optimized Actions for All 4 Parameters:",
+        "irr_label": "Irrigation", "pest_label": "Pest Control",
+        "fert_label": "Fertilizer", "total_label": "Total Result",
+        "increase": "Increase", "reduce": "Reduce",
+        "before": "Before", "after": "After", "gain": "Gain",
+        # Pest plan
+        "pest_risk": "Pest Risk", "treat_schedule": "Treatment Schedule",
+        "frequency": "Frequency", "yld_protection": "Yield Protection",
+        "best_time": "Best Time: 6:00 AM – 8:00 AM",
+        "rain_delay": "Rain Delay: Wait 48hrs after rain",
+        "safety": "Safety: Always wear protective gear",
+        # PDF
+        "pdf_title": "CropAI — Crop Yield Prediction & Optimization Report",
+        "pdf_curr": "CURRENT YIELD", "pdf_opt": "OPTIMIZED YIELD",
+        "pdf_opt_actions": "OPTIMIZATION ACTIONS (4 Parameters)",
+        "pdf_weather": "LIVE WEATHER", "pdf_soil": "SOIL HEALTH",
+        "pdf_pest": "PEST CONTROL PLAN",
+        "pdf_footer": "CropAI  |  Random Forest + SHAP + LIME + 4-Parameter Optimization  |  IEEE Research Project",
     },
+
     "🇮🇳 हिंदी": {
         "title":    "CropAI — AI फसल उपज भविष्यवाणी",
         "subtitle": "व्याख्यात्मक AI · 4-पैरामीटर अनुकूलन · रीयल-टाइम",
@@ -784,8 +788,53 @@ languages = {
         "rec":      "स्मार्ट किसान सिफारिशें",
         "download": "📥  PDF रिपोर्ट डाउनलोड करें",
         "temp": "तापमान", "rain": "वर्षा", "hum": "आर्द्रता",
-        "n": "नाइट्रोजन", "ph": "मिट्टी pH", "yield": "अनुमानित उपज"
+        "n": "नाइट्रोजन", "ph": "मिट्टी pH", "yield": "अनुमानित उपज",
+        "shap_info_title": "XAI विधि 1/2 — SHAP (वैश्विक व्याख्या)",
+        "shap_info": (
+            "<b>SHAP</b> सभी 28,242 FAO फसल रिकॉर्ड में प्रशिक्षित मॉडल का "
+            "विश्लेषण करता है। <b style='color:#2e7d32'>हरा</b> = उपज बढ़ाता है। "
+            "<b style='color:#c62828'>लाल</b> = उपज घटाता है। "
+            "यह उत्तर देता है: <i>\"कौन से कारक सबसे अधिक महत्वपूर्ण हैं?\"</i>"
+        ),
+        "shap_breakdown": "प्रभाव के क्रम में कारक-वार विवरण:",
+        "positive_factor": "सकारात्मक कारक", "negative_factor": "नकारात्मक कारक",
+        "impact_label": "प्रभाव",
+        "lime_info_title": "XAI विधि 2/2 — LIME (व्यक्तिगत व्याख्या)",
+        "lime_info": (
+            "<b>LIME</b> केवल <b>इस विशिष्ट भविष्यवाणी</b> की व्याख्या करता है। "
+            "SHAP वैश्विक है (सभी किसान), LIME स्थानीय है (आपका खेत)। "
+            "दोनों मिलकर <b>पूर्ण XAI कवरेज</b> देते हैं।"
+        ),
+        "lime_breakdown": "आपकी विशिष्ट भविष्यवाणी के लिए कारक-वार स्पष्टीकरण:",
+        "pos_contrib": "सकारात्मक योगदान", "neg_contrib": "उपज सीमित करने वाला कारक",
+        "opt_info_title": "4-पैरामीटर अनुकूलन कैसे काम करता है?",
+        "opt_info": (
+            "AI ऑप्टिमाइज़र <b>64 संयोजन</b> एक साथ परीक्षण करता है:<br><br>"
+            "&nbsp;&nbsp;💧 <b>सिंचाई</b> — 8 स्तर<br>"
+            "&nbsp;&nbsp;🐛 <b>कीट नियंत्रण</b> — 8 स्तर<br>"
+            "&nbsp;&nbsp;🌿 <b>उर्वरक</b> — मिट्टी pH विश्लेषण<br>"
+            "&nbsp;&nbsp;📈 <b>उत्पादकता</b> — सर्वोत्तम संयोजन"
+        ),
+        "target_achieved": "समस्या विवरण लक्ष्य प्राप्त!",
+        "target_text": "उत्पादकता सुधार — आवश्यक ≥10% लक्ष्य से अधिक ✅",
+        "opt_actions": "सभी 4 मापदंडों के लिए अनुकूलित क्रियाएं:",
+        "irr_label": "सिंचाई", "pest_label": "कीट नियंत्रण",
+        "fert_label": "उर्वरक", "total_label": "कुल परिणाम",
+        "increase": "बढ़ाएं", "reduce": "घटाएं",
+        "before": "पहले", "after": "बाद", "gain": "लाभ",
+        "pest_risk": "कीट जोखिम", "treat_schedule": "उपचार अनुसूची",
+        "frequency": "आवृत्ति", "yld_protection": "उपज सुरक्षा",
+        "best_time": "सर्वोत्तम समय: सुबह 6:00 – 8:00",
+        "rain_delay": "बारिश विलंब: बारिश के 48 घंटे बाद",
+        "safety": "सुरक्षा: सुरक्षात्मक उपकरण पहनें",
+        "pdf_title": "CropAI — फसल उपज भविष्यवाणी और अनुकूलन रिपोर्ट",
+        "pdf_curr": "वर्तमान उपज", "pdf_opt": "अनुकूलित उपज",
+        "pdf_opt_actions": "अनुकूलन क्रियाएं (4 मापदंड)",
+        "pdf_weather": "लाइव मौसम", "pdf_soil": "मिट्टी स्वास्थ्य",
+        "pdf_pest": "कीट नियंत्रण योजना",
+        "pdf_footer": "CropAI  |  Random Forest + SHAP + LIME + 4-पैरामीटर अनुकूलन  |  IEEE शोध परियोजना",
     },
+
     "🇮🇳 தமிழ்": {
         "title":    "CropAI — AI பயிர் மகசூல் கணிப்பு",
         "subtitle": "விளக்கமான AI · 4-அளவுரு உகந்தமயமாக்கல் · நேரடி தரவு",
@@ -801,8 +850,53 @@ languages = {
         "rec":      "ஸ்மார்ட் விவசாயி பரிந்துரைகள்",
         "download": "📥  PDF அறிக்கையை பதிவிறக்கவும்",
         "temp": "வெப்பநிலை", "rain": "மழை", "hum": "ஈரப்பதம்",
-        "n": "நைட்ரஜன்", "ph": "மண் pH", "yield": "கணிக்கப்பட்ட மகசூல்"
+        "n": "நைட்ரஜன்", "ph": "மண் pH", "yield": "கணிக்கப்பட்ட மகசூல்",
+        "shap_info_title": "XAI முறை 1/2 — SHAP (உலகளாவிய விளக்கம்)",
+        "shap_info": (
+            "<b>SHAP</b> அனைத்து 28,242 FAO பயிர் பதிவுகளையும் பகுப்பாய்வு செய்கிறது. "
+            "<b style='color:#2e7d32'>பச்சை</b> = மகசூல் அதிகரிக்கிறது. "
+            "<b style='color:#c62828'>சிவப்பு</b> = மகசூல் குறைகிறது. "
+            "இது விடையளிக்கிறது: <i>\"எந்த காரணிகள் மிகவும் முக்கியம்?\"</i>"
+        ),
+        "shap_breakdown": "தாக்கத்தின் வரிசையில் காரணி விவரம்:",
+        "positive_factor": "நேர்மறை காரணி", "negative_factor": "எதிர்மறை காரணி",
+        "impact_label": "தாக்கம்",
+        "lime_info_title": "XAI முறை 2/2 — LIME (தனிப்பட்ட விளக்கம்)",
+        "lime_info": (
+            "<b>LIME</b> <b>இந்த குறிப்பிட்ட கணிப்பை மட்டுமே</b> விளக்குகிறது. "
+            "SHAP உலகளாவியது, LIME உங்கள் பண்ணைக்கு மட்டுமானது. "
+            "இரண்டும் சேர்ந்து <b>முழுமையான XAI</b> வழங்குகின்றன."
+        ),
+        "lime_breakdown": "உங்கள் குறிப்பிட்ட கணிப்புக்கான காரணி விளக்கம்:",
+        "pos_contrib": "நேர்மறை பங்களிப்பு", "neg_contrib": "மகசூல் கட்டுப்படுத்தும் காரணி",
+        "opt_info_title": "4-அளவுரு உகந்தமயமாக்கல் எவ்வாறு செயல்படுகிறது?",
+        "opt_info": (
+            "AI ஆப்டிமைசர் <b>64 சேர்க்கைகளை</b> சோதிக்கிறது:<br><br>"
+            "&nbsp;&nbsp;💧 <b>நீர்ப்பாசனம்</b> — 8 நிலைகள்<br>"
+            "&nbsp;&nbsp;🐛 <b>பூச்சி கட்டுப்பாடு</b> — 8 நிலைகள்<br>"
+            "&nbsp;&nbsp;🌿 <b>உரம்</b> — மண் pH பகுப்பாய்வு<br>"
+            "&nbsp;&nbsp;📈 <b>உற்பத்தி</b> — சிறந்த சேர்க்கை"
+        ),
+        "target_achieved": "இலக்கு அடையப்பட்டது!",
+        "target_text": "உற்பத்தி மேம்பாடு — ≥10% இலக்கை மிஞ்சியது ✅",
+        "opt_actions": "4 அளவுருக்களுக்கான உகந்த நடவடிக்கைகள்:",
+        "irr_label": "நீர்ப்பாசனம்", "pest_label": "பூச்சி கட்டுப்பாடு",
+        "fert_label": "உரம்", "total_label": "மொத்த முடிவு",
+        "increase": "அதிகரிக்கவும்", "reduce": "குறைக்கவும்",
+        "before": "முன்பு", "after": "பின்பு", "gain": "ஆதாயம்",
+        "pest_risk": "பூச்சி அபாயம்", "treat_schedule": "சிகிச்சை அட்டவணை",
+        "frequency": "அதிர்வெண்", "yld_protection": "மகசூல் பாதுகாப்பு",
+        "best_time": "சிறந்த நேரம்: காலை 6:00 – 8:00",
+        "rain_delay": "மழை தாமதம்: மழைக்கு 48 மணி நேரம் பின்",
+        "safety": "பாதுகாப்பு: பாதுகாப்பு உபகரணங்கள் அணியவும்",
+        "pdf_title": "CropAI — பயிர் மகசூல் கணிப்பு மற்றும் உகந்தமயமாக்கல் அறிக்கை",
+        "pdf_curr": "தற்போதைய மகசூல்", "pdf_opt": "உகந்த மகசூல்",
+        "pdf_opt_actions": "உகந்தமயமாக்கல் நடவடிக்கைகள் (4 அளவுருக்கள்)",
+        "pdf_weather": "நேரடி வானிலை", "pdf_soil": "மண் ஆரோக்கியம்",
+        "pdf_pest": "பூச்சி கட்டுப்பாடு திட்டம்",
+        "pdf_footer": "CropAI  |  Random Forest + SHAP + LIME + 4-அளவுரு உகந்தமயமாக்கல்  |  IEEE ஆராய்ச்சி திட்டம்",
     },
+
     "🇮🇳 తెలుగు": {
         "title":    "CropAI — AI పంట దిగుబడి అంచనా",
         "subtitle": "వివరణాత్మక AI · 4-పారామీటర్ ఆప్టిమైజేషన్ · లైవ్",
@@ -818,8 +912,53 @@ languages = {
         "rec":      "స్మార్ట్ రైతు సిఫార్సులు",
         "download": "📥  PDF నివేదికను డౌన్లోడ్ చేయండి",
         "temp": "ఉష్ణోగ్రత", "rain": "వర్షపాతం", "hum": "తేమ",
-        "n": "నైట్రోజన్", "ph": "నేల pH", "yield": "అంచనా దిగుబడి"
+        "n": "నైట్రోజన్", "ph": "నేల pH", "yield": "అంచనా దిగుబడి",
+        "shap_info_title": "XAI పద్ధతి 1/2 — SHAP (గ్లోబల్ వివరణ)",
+        "shap_info": (
+            "<b>SHAP</b> 28,242 FAO పంట రికార్డులలో శిక్షణ పొందిన మోడల్‌ను "
+            "విశ్లేషిస్తుంది. <b style='color:#2e7d32'>ఆకుపచ్చ</b> = దిగుబడి పెరుగుతుంది. "
+            "<b style='color:#c62828'>ఎరుపు</b> = దిగుబడి తగ్గుతుంది. "
+            "ఇది సమాధానిస్తుంది: <i>\"మొత్తంగా ఏ అంశాలు ముఖ్యమైనవి?\"</i>"
+        ),
+        "shap_breakdown": "ప్రభావం వరుసలో అంశాల వివరణ:",
+        "positive_factor": "సానుకూల అంశం", "negative_factor": "ప్రతికూల అంశం",
+        "impact_label": "ప్రభావం",
+        "lime_info_title": "XAI పద్ధతి 2/2 — LIME (వ్యక్తిగత వివరణ)",
+        "lime_info": (
+            "<b>LIME</b> <b>ఈ నిర్దిష్ట అంచనాను మాత్రమే</b> వివరిస్తుంది. "
+            "SHAP గ్లోబల్, LIME మీ పొలానికి మాత్రమే. "
+            "రెండూ కలిసి <b>సంపూర్ణ XAI</b> అందిస్తాయి."
+        ),
+        "lime_breakdown": "మీ నిర్దిష్ట అంచనాకు అంశాల వివరణ:",
+        "pos_contrib": "సానుకూల సహకారి", "neg_contrib": "దిగుబడి పరిమితం చేసే అంశం",
+        "opt_info_title": "4-పారామీటర్ ఆప్టిమైజేషన్ ఎలా పనిచేస్తుంది?",
+        "opt_info": (
+            "AI ఆప్టిమైజర్ <b>64 కలయికలను</b> పరీక్షిస్తుంది:<br><br>"
+            "&nbsp;&nbsp;💧 <b>నీటిపారుదల</b> — 8 స్థాయిలు<br>"
+            "&nbsp;&nbsp;🐛 <b>పెస్ట్ కంట్రోల్</b> — 8 స్థాయిలు<br>"
+            "&nbsp;&nbsp;🌿 <b>ఎరువు</b> — నేల pH విశ్లేషణ<br>"
+            "&nbsp;&nbsp;📈 <b>ఉత్పాదకత</b> — అత్యుత్తమ కలయిక"
+        ),
+        "target_achieved": "లక్ష్యం సాధించబడింది!",
+        "target_text": "ఉత్పాదకత మెరుగుదల — ≥10% లక్ష్యాన్ని మించింది ✅",
+        "opt_actions": "4 పారామీటర్లకు ఆప్టిమైజ్ చేసిన చర్యలు:",
+        "irr_label": "నీటిపారుదల", "pest_label": "పెస్ట్ కంట్రోల్",
+        "fert_label": "ఎరువు", "total_label": "మొత్తం ఫలితం",
+        "increase": "పెంచండి", "reduce": "తగ్గించండి",
+        "before": "ముందు", "after": "తర్వాత", "gain": "లాభం",
+        "pest_risk": "పెస్ట్ ప్రమాదం", "treat_schedule": "చికిత్స షెడ్యూల్",
+        "frequency": "పౌనఃపున్యం", "yld_protection": "దిగుబడి రక్షణ",
+        "best_time": "అత్యుత్తమ సమయం: ఉదయం 6:00 – 8:00",
+        "rain_delay": "వర్షం తర్వాత 48 గంటలు వేచి ఉండండి",
+        "safety": "భద్రత: రక్షణ పరికరాలు ధరించండి",
+        "pdf_title": "CropAI — పంట దిగుబడి అంచనా మరియు ఆప్టిమైజేషన్ నివేదిక",
+        "pdf_curr": "ప్రస్తుత దిగుబడి", "pdf_opt": "ఆప్టిమైజ్ దిగుబడి",
+        "pdf_opt_actions": "ఆప్టిమైజేషన్ చర్యలు (4 పారామీటర్లు)",
+        "pdf_weather": "లైవ్ వాతావరణం", "pdf_soil": "నేల ఆరోగ్యం",
+        "pdf_pest": "పెస్ట్ కంట్రోల్ ప్లాన్",
+        "pdf_footer": "CropAI  |  Random Forest + SHAP + LIME + 4-పారామీటర్ ఆప్టిమైజేషన్  |  IEEE పరిశోధన ప్రాజెక్ట్",
     },
+
     "🇮🇳 ಕನ್ನಡ": {
         "title":    "CropAI — AI ಬೆಳೆ ಇಳುವರಿ ಮುನ್ಸೂಚನೆ",
         "subtitle": "ವಿವರಣಾತ್ಮಕ AI · 4-ಪ್ಯಾರಾಮೀಟರ್ ಆಪ್ಟಿಮೈಸೇಶನ್ · ನೇರ",
@@ -835,7 +974,51 @@ languages = {
         "rec":      "ಸ್ಮಾರ್ಟ್ ರೈತ ಶಿಫಾರಸುಗಳು",
         "download": "📥  PDF ವರದಿ ಡೌನ್‌ಲೋಡ್ ಮಾಡಿ",
         "temp": "ತಾಪಮಾನ", "rain": "ಮಳೆ", "hum": "ಆರ್ದ್ರತೆ",
-        "n": "ನೈಟ್ರೋಜನ್", "ph": "ಮಣ್ಣಿನ pH", "yield": "ಅಂದಾಜು ಇಳುವರಿ"
+        "n": "ನೈಟ್ರೋಜನ್", "ph": "ಮಣ್ಣಿನ pH", "yield": "ಅಂದಾಜು ಇಳುವರಿ",
+        "shap_info_title": "XAI ವಿಧಾನ 1/2 — SHAP (ಜಾಗತಿಕ ವಿವರಣೆ)",
+        "shap_info": (
+            "<b>SHAP</b> ಎಲ್ಲಾ 28,242 FAO ಬೆಳೆ ದಾಖಲೆಗಳಲ್ಲಿ ತರಬೇತಿ ಪಡೆದ ಮಾದರಿಯನ್ನು "
+            "ವಿಶ್ಲೇಷಿಸುತ್ತದೆ. <b style='color:#2e7d32'>ಹಸಿರು</b> = ಇಳುವರಿ ಹೆಚ್ಚುತ್ತದೆ. "
+            "<b style='color:#c62828'>ಕೆಂಪು</b> = ಇಳುವರಿ ಕಡಿಮೆಯಾಗುತ್ತದೆ. "
+            "ಇದು ಉತ್ತರಿಸುತ್ತದೆ: <i>\"ಯಾವ ಅಂಶಗಳು ಹೆಚ್ಚು ಮುಖ್ಯ?\"</i>"
+        ),
+        "shap_breakdown": "ಪ್ರಭಾವದ ಕ್ರಮದಲ್ಲಿ ಅಂಶ ವಿವರಣೆ:",
+        "positive_factor": "ಧನಾತ್ಮಕ ಅಂಶ", "negative_factor": "ಋಣಾತ್ಮಕ ಅಂಶ",
+        "impact_label": "ಪ್ರಭಾವ",
+        "lime_info_title": "XAI ವಿಧಾನ 2/2 — LIME (ವೈಯಕ್ತಿಕ ವಿವರಣೆ)",
+        "lime_info": (
+            "<b>LIME</b> <b>ಈ ನಿರ್ದಿಷ್ಟ ಮುನ್ಸೂಚನೆಯನ್ನು ಮಾತ್ರ</b> ವಿವರಿಸುತ್ತದೆ. "
+            "SHAP ಜಾಗತಿಕ, LIME ನಿಮ್ಮ ಹೊಲಕ್ಕೆ ಮಾತ್ರ. "
+            "ಎರಡೂ ಸೇರಿ <b>ಸಂಪೂರ್ಣ XAI</b> ನೀಡುತ್ತವೆ."
+        ),
+        "lime_breakdown": "ನಿಮ್ಮ ನಿರ್ದಿಷ್ಟ ಮುನ್ಸೂಚನೆಗೆ ಅಂಶ ವಿವರಣೆ:",
+        "pos_contrib": "ಧನಾತ್ಮಕ ಕೊಡುಗೆ", "neg_contrib": "ಇಳುವರಿ ಸೀಮಿತಗೊಳಿಸುವ ಅಂಶ",
+        "opt_info_title": "4-ಪ್ಯಾರಾಮೀಟರ್ ಆಪ್ಟಿಮೈಸೇಶನ್ ಹೇಗೆ ಕೆಲಸ ಮಾಡುತ್ತದೆ?",
+        "opt_info": (
+            "AI ಆಪ್ಟಿಮೈಸರ್ <b>64 ಸಂಯೋಜನೆಗಳನ್ನು</b> ಪರೀಕ್ಷಿಸುತ್ತದೆ:<br><br>"
+            "&nbsp;&nbsp;💧 <b>ನೀರಾವರಿ</b> — 8 ಹಂತಗಳು<br>"
+            "&nbsp;&nbsp;🐛 <b>ಕೀಟ ನಿಯಂತ್ರಣ</b> — 8 ಹಂತಗಳು<br>"
+            "&nbsp;&nbsp;🌿 <b>ಗೊಬ್ಬರ</b> — ಮಣ್ಣಿನ pH ವಿಶ್ಲೇಷಣೆ<br>"
+            "&nbsp;&nbsp;📈 <b>ಉತ್ಪಾದಕತೆ</b> — ಅತ್ಯುತ್ತಮ ಸಂಯೋಜನೆ"
+        ),
+        "target_achieved": "ಗುರಿ ಸಾಧಿಸಲಾಗಿದೆ!",
+        "target_text": "ಉತ್ಪಾದಕತೆ ಸುಧಾರಣೆ — ≥10% ಗುರಿಯನ್ನು ಮೀರಿದೆ ✅",
+        "opt_actions": "ಎಲ್ಲಾ 4 ಪ್ಯಾರಾಮೀಟರ್‌ಗಳಿಗೆ ಆಪ್ಟಿಮೈಸ್ ಮಾಡಿದ ಕ್ರಮಗಳು:",
+        "irr_label": "ನೀರಾವರಿ", "pest_label": "ಕೀಟ ನಿಯಂತ್ರಣ",
+        "fert_label": "ಗೊಬ್ಬರ", "total_label": "ಒಟ್ಟು ಫಲಿತಾಂಶ",
+        "increase": "ಹೆಚ್ಚಿಸಿ", "reduce": "ಕಡಿಮೆ ಮಾಡಿ",
+        "before": "ಮೊದಲು", "after": "ನಂತರ", "gain": "ಲಾಭ",
+        "pest_risk": "ಕೀಟ ಅಪಾಯ", "treat_schedule": "ಚಿಕಿತ್ಸಾ ವೇಳಾಪಟ್ಟಿ",
+        "frequency": "ಆವರ್ತನ", "yld_protection": "ಇಳುವರಿ ರಕ್ಷಣೆ",
+        "best_time": "ಉತ್ತಮ ಸಮಯ: ಬೆಳಗ್ಗೆ 6:00 – 8:00",
+        "rain_delay": "ಮಳೆ ನಂತರ 48 ಗಂಟೆ ಕಾಯಿರಿ",
+        "safety": "ಸುರಕ್ಷತೆ: ರಕ್ಷಣಾ ಸಾಧನಗಳನ್ನು ಧರಿಸಿ",
+        "pdf_title": "CropAI — ಬೆಳೆ ಇಳುವರಿ ಮುನ್ಸೂಚನೆ ಮತ್ತು ಆಪ್ಟಿಮೈಸೇಶನ್ ವರದಿ",
+        "pdf_curr": "ಪ್ರಸ್ತುತ ಇಳುವರಿ", "pdf_opt": "ಆಪ್ಟಿಮೈಸ್ ಇಳುವರಿ",
+        "pdf_opt_actions": "ಆಪ್ಟಿಮೈಸೇಶನ್ ಕ್ರಮಗಳು (4 ಪ್ಯಾರಾಮೀಟರ್‌ಗಳು)",
+        "pdf_weather": "ನೇರ ಹವಾಮಾನ", "pdf_soil": "ಮಣ್ಣಿನ ಆರೋಗ್ಯ",
+        "pdf_pest": "ಕೀಟ ನಿಯಂತ್ರಣ ಯೋಜನೆ",
+        "pdf_footer": "CropAI  |  Random Forest + SHAP + LIME + 4-ಪ್ಯಾರಾಮೀಟರ್ ಆಪ್ಟಿಮೈಸೇಶನ್  |  IEEE ಸಂಶೋಧನಾ ಯೋಜನೆ",
     }
 }
 
@@ -1036,20 +1219,10 @@ if predict_btn:
                 f"<div class='sec-header'>{lang['opt']}</div>",
                 unsafe_allow_html=True)
 
-            st.markdown("""
+            st.markdown(f"""
             <div class='info-card'>
-                <div class='info-card-title'>
-                    How does 4-Parameter Optimization work?
-                </div>
-                The AI optimizer tests <b>64 combinations</b> of all
-                controllable farm parameters simultaneously:<br><br>
-                &nbsp;&nbsp;💧 <b>Irrigation</b> — 8 rainfall levels tested<br>
-                &nbsp;&nbsp;🐛 <b>Pest Control</b> — 8 pesticide levels tested<br>
-                &nbsp;&nbsp;🌿 <b>Fertilizer</b> — soil pH analysis applied<br>
-                &nbsp;&nbsp;📈 <b>Productivity</b> — best combination selected<br><br>
-                This directly satisfies the problem statement goal of
-                <b>optimizing irrigation, fertilization, and pest control</b>
-                to achieve <b>≥10% productivity improvement</b>.
+                <div class='info-card-title'>{lang['opt_info_title']}</div>
+                {lang['opt_info']}
             </div>
             """, unsafe_allow_html=True)
 
@@ -1125,25 +1298,25 @@ if predict_btn:
             plt.close()
 
             # ── 4 Action Cards ──
-            st.markdown("### 🎯 Optimized Actions for All 4 Parameters:")
+            st.markdown(f"### 🎯 {lang['opt_actions']}")
             a1, a2, a3, a4 = st.columns(4)
 
             rain_diff = opt['best_rainfall_mm'] - opt['current_rainfall']
             pest_diff = opt['best_pesticides']  - opt['current_pesticides']
 
             with a1:
+                irr_dir = lang['increase'] if rain_diff > 0 else lang['reduce']
                 st.markdown(f"""
                 <div class='opt-action'>
-                    <div class='opt-action-title'>💧 Irrigation</div>
+                    <div class='opt-action-title'>💧 {lang['irr_label']}</div>
                     <div class='opt-action-item'>
-                        Current: {opt['current_rainfall']:.0f} mm/yr
+                        {lang['before']}: {opt['current_rainfall']:.0f} mm/yr
                     </div>
                     <div class='opt-action-item'>
-                        Target: <b>{opt['best_rainfall_mm']:.0f} mm/yr</b>
+                        {lang['after']}: <b>{opt['best_rainfall_mm']:.0f} mm/yr</b>
                     </div>
                     <div class='opt-action-item'>
-                        {'↑ Increase' if rain_diff>0 else '↓ Reduce'} by
-                        {abs(rain_diff):.0f}mm
+                        {'↑' if rain_diff>0 else '↓'} {irr_dir} {abs(rain_diff):.0f}mm
                     </div>
                     <div class='opt-action-item'>
                         → {'Add drip/sprinkler' if rain_diff>0 else 'Improve drainage'}
@@ -1154,18 +1327,18 @@ if predict_btn:
             with a2:
                 st.markdown(f"""
                 <div class='opt-action'>
-                    <div class='opt-action-title'>🐛 Pest Control</div>
+                    <div class='opt-action-title'>🐛 {lang['pest_label']}</div>
                     <div class='opt-action-item'>
-                        Current: {opt['current_pesticides']:.0f} tonnes
+                        {lang['before']}: {opt['current_pesticides']:.0f} t
                     </div>
                     <div class='opt-action-item'>
-                        Target: <b>{opt['best_pesticides']:.0f} tonnes</b>
+                        {lang['after']}: <b>{opt['best_pesticides']:.0f} t</b>
                     </div>
                     <div class='opt-action-item'>
-                        Risk: <b>{pest_plan['risk']}</b>
+                        {lang['pest_risk']}: <b>{pest_plan['risk']}</b>
                     </div>
                     <div class='opt-action-item'>
-                        → Treat {pest_plan['frequency']}
+                        → {pest_plan['frequency']}
                     </div>
                 </div>
                 """, unsafe_allow_html=True)
@@ -1173,15 +1346,15 @@ if predict_btn:
             with a3:
                 st.markdown(f"""
                 <div class='opt-action'>
-                    <div class='opt-action-title'>🌿 Fertilizer</div>
+                    <div class='opt-action-title'>🌿 {lang['fert_label']}</div>
                     <div class='opt-action-item'>
-                        Soil pH: {soil['ph']}
+                        {lang['ph']}: {soil['ph']}
                     </div>
                     <div class='opt-action-item'>
                         Status: <b>{opt['fert_status']}</b>
                     </div>
                     <div class='opt-action-item'>
-                        Expected: {opt['fert_impact']}
+                        {opt['fert_impact']}
                     </div>
                     <div class='opt-action-item'>
                         → {opt['fert_action'][:35]}...
@@ -1192,18 +1365,18 @@ if predict_btn:
             with a4:
                 st.markdown(f"""
                 <div class='opt-action'>
-                    <div class='opt-action-title'>📈 Total Result</div>
+                    <div class='opt-action-title'>📈 {lang['total_label']}</div>
                     <div class='opt-action-item'>
-                        Before: {predicted_tons:.2f} t/ha
+                        {lang['before']}: {predicted_tons:.2f} t/ha
                     </div>
                     <div class='opt-action-item'>
-                        After: <b>{opt['optimized_yield']:.2f} t/ha</b>
+                        {lang['after']}: <b>{opt['optimized_yield']:.2f} t/ha</b>
                     </div>
                     <div class='opt-action-item'>
-                        Gain: <b>+{opt['improvement_pct']:.1f}%</b>
+                        {lang['gain']}: <b>+{opt['improvement_pct']:.1f}%</b>
                     </div>
                     <div class='opt-action-item'>
-                        {'✅ Target Achieved!' if opt['improvement_pct']>=10
+                        {'✅ ' + lang['target_achieved'] if opt['improvement_pct']>=10
                          else '📈 Improvement Found'}
                     </div>
                 </div>
@@ -1217,13 +1390,13 @@ if predict_btn:
                             color:white; text-align:center; margin:1rem 0;
                             box-shadow:0 4px 15px rgba(27,94,32,0.3)'>
                     <div style='font-size:1.5rem; font-weight:900'>
-                        🎉 Problem Statement Target ACHIEVED!
+                        🎉 {lang['target_achieved']}
                     </div>
                     <div style='font-size:1rem; color:#c8e6c9; margin-top:0.5rem'>
-                        System achieved +{opt['improvement_pct']:.1f}% productivity
-                        improvement — exceeds the required ≥10% target ✅<br>
-                        Irrigation ✅ &nbsp;|&nbsp; Fertilization ✅
-                        &nbsp;|&nbsp; Pest Control ✅ &nbsp;|&nbsp; XAI ✅
+                        +{opt['improvement_pct']:.1f}% {lang['target_text']}<br>
+                        {lang['irr_label']} ✅ &nbsp;|&nbsp;
+                        {lang['fert_label']} ✅ &nbsp;|&nbsp;
+                        {lang['pest_label']} ✅ &nbsp;|&nbsp; XAI ✅
                     </div>
                 </div>
                 """, unsafe_allow_html=True)
@@ -1260,22 +1433,22 @@ if predict_btn:
                 st.markdown(f"""
                 <div class='opt-action'>
                     <div class='opt-action-title'>
-                        📅 Treatment Schedule
+                        📅 {lang['treat_schedule']}
                     </div>
                     <div class='opt-action-item'>
-                        Frequency: <b>{pest_plan['frequency']}</b>
+                        {lang['frequency']}: <b>{pest_plan['frequency']}</b>
                     </div>
                     <div class='opt-action-item'>
-                        Yield Protection: <b>{pest_plan['saving']}</b>
+                        {lang['yld_protection']}: <b>{pest_plan['saving']}</b>
                     </div>
                     <div class='opt-action-item'>
-                        Best Time: 6:00 AM – 8:00 AM
+                        {lang['best_time']}
                     </div>
                     <div class='opt-action-item'>
-                        Rain Delay: Wait 48hrs after rain
+                        {lang['rain_delay']}
                     </div>
                     <div class='opt-action-item'>
-                        Safety: Always wear protective gear
+                        {lang['safety']}
                     </div>
                 </div>
                 """, unsafe_allow_html=True)
@@ -1286,24 +1459,10 @@ if predict_btn:
             st.markdown(
                 f"<div class='sec-header'>🧠 {lang['shap']}</div>",
                 unsafe_allow_html=True)
-            st.markdown("""
+            st.markdown(f"""
             <div class='info-card'>
-                <div class='info-card-title'>
-                    XAI Method 1 of 2 — SHAP (Global Explanation)
-                </div>
-                <b>SHAP</b> (SHapley Additive exPlanations) is an
-                Explainable AI technique that analyses the entire
-                trained model across all 28,242 FAO crop records to
-                determine how much each input variable contributes
-                to the yield prediction on average.<br><br>
-                <b style='color:#2e7d32'>Green bars</b> = this
-                factor pushes yield higher across the model.&nbsp;
-                <b style='color:#c62828'>Red bars</b> = this
-                factor reduces yield prediction.&nbsp;
-                Bar length = strength of influence.
-                This is the <b>global, model-level explanation</b>
-                — it answers: <i>"Which factors matter most
-                overall?"</i>
+                <div class='info-card-title'>{lang['shap_info_title']}</div>
+                {lang['shap_info']}
             </div>
             """, unsafe_allow_html=True)
 
@@ -1341,10 +1500,10 @@ if predict_btn:
             st.pyplot(fig_s)
             plt.close()
 
-            st.markdown("""
+            st.markdown(f"""
             <p style='color:#1b5e20; font-size:0.95rem; font-weight:700;
                       margin:1rem 0 0.5rem 0'>
-                📋 Factor-by-factor breakdown — ranked by strength of influence:
+                📋 {lang['shap_breakdown']}
             </p>
             """, unsafe_allow_html=True)
 
@@ -1370,7 +1529,7 @@ if predict_btn:
                     feat, val = shap_sorted[i + j]
                     meaning   = get_shap_meaning(feat, val)
                     css       = "shap-positive" if val > 0 else "shap-negative"
-                    status    = "Positive Factor" if val > 0 else "Negative Factor"
+                    status    = lang['positive_factor'] if val > 0 else lang['negative_factor']
                     arrow     = "▲" if val > 0 else "▼"
                     femoji    = feat_icons.get(feat, "📊")
                     tons_val  = abs(val) / 10000
@@ -1387,7 +1546,7 @@ if predict_btn:
                                 </span>
                             </div>
                             <div class='shap-value'>
-                                {arrow} Impact: {abs(val):.0f} hg/ha
+                                {arrow} {lang['impact_label']}: {abs(val):.0f} hg/ha
                                 &nbsp;=&nbsp; {tons_val:.3f} tons/ha
                             </div>
                             <div class='shap-meaning'>
@@ -1402,27 +1561,10 @@ if predict_btn:
             st.markdown(
                 f"<div class='sec-header'>🔬 {lang['lime']}</div>",
                 unsafe_allow_html=True)
-            st.markdown("""
+            st.markdown(f"""
             <div class='info-card'>
-                <div class='info-card-title'>
-                    XAI Method 2 of 2 — LIME (Local / Individual Explanation)
-                </div>
-                <b>LIME</b> (Local Interpretable Model-agnostic Explanations)
-                explains <b>this specific prediction only</b> — not the
-                overall model. It creates a simplified local approximation
-                around your exact input values to identify which factors
-                pushed your particular yield estimate up or down.<br><br>
-                <b>Why SHAP and LIME give different numbers — and why that
-                is correct:</b> SHAP measures a feature's average influence
-                across the entire dataset (28,242 records). LIME measures its
-                influence specifically for your farm's conditions today.
-                A factor like rainfall may be moderately important overall
-                (SHAP) but critically important or unimportant for your
-                specific city and crop combination (LIME). Using both
-                together provides <b>complete XAI coverage</b> — global
-                model transparency and individual prediction transparency —
-                which is the standard dual-XAI approach in research
-                (Ribeiro et al. 2016; Lundberg &amp; Lee 2017).
+                <div class='info-card-title'>{lang['lime_info_title']}</div>
+                {lang['lime_info']}
             </div>
             """, unsafe_allow_html=True)
 
@@ -1597,10 +1739,10 @@ if predict_btn:
                 return label, icon, impact_html, expl
 
             # ── Render LIME cards in clean 2-column grid ──
-            st.markdown("""
+            st.markdown(f"""
             <p style='color:#1b5e20; font-size:0.95rem; font-weight:700;
                       margin:1rem 0 0.5rem 0'>
-                Factor-by-factor explanation for your specific prediction:
+                {lang['lime_breakdown']}
             </p>
             """, unsafe_allow_html=True)
 
@@ -1617,8 +1759,8 @@ if predict_btn:
                             crop, weather, soil, year)
                     css    = "shap-positive" if importance > 0 \
                              else "shap-negative"
-                    status = "Positive contributor" if importance > 0 \
-                             else "Yield-limiting factor"
+                    status = lang['pos_contrib'] if importance > 0 \
+                             else lang['neg_contrib']
                     rank   = i + j + 1
                     with col:
                         st.markdown(f"""
@@ -1675,7 +1817,7 @@ if predict_btn:
                 pdf_buf = generate_pdf(
                     city, crop, year, weather, soil,
                     predicted_tons, shap_vals,
-                    feature_names, lime_exp, opt, pest_plan)
+                    feature_names, lime_exp, opt, pest_plan, lang)
 
             st.download_button(
                 label=lang["download"],
