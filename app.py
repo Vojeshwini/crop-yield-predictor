@@ -910,6 +910,7 @@ st.markdown(f"""
         <span class='badge'>📡 Live Weather</span>
         <span class='badge'>🌐 5 Languages</span>
         <span class='badge'>📥 PDF Report</span>
+        <span class='badge'>⚙️ Backend: Python · scikit-learn · Streamlit</span>
     </div>
 </div>
 """, unsafe_allow_html=True)
@@ -1287,11 +1288,22 @@ if predict_btn:
                 unsafe_allow_html=True)
             st.markdown("""
             <div class='info-card'>
-                <div class='info-card-title'>What is SHAP?</div>
-                <b>SHAP</b> shows which features push yield
-                <b style='color:#2e7d32'>HIGHER (green)</b> or
-                <b style='color:#c62828'>LOWER (red)</b> —
-                the <b>global XAI explanation</b>.
+                <div class='info-card-title'>
+                    XAI Method 1 of 2 — SHAP (Global Explanation)
+                </div>
+                <b>SHAP</b> (SHapley Additive exPlanations) is an
+                Explainable AI technique that analyses the entire
+                trained model across all 28,242 FAO crop records to
+                determine how much each input variable contributes
+                to the yield prediction on average.<br><br>
+                <b style='color:#2e7d32'>Green bars</b> = this
+                factor pushes yield higher across the model.&nbsp;
+                <b style='color:#c62828'>Red bars</b> = this
+                factor reduces yield prediction.&nbsp;
+                Bar length = strength of influence.
+                This is the <b>global, model-level explanation</b>
+                — it answers: <i>"Which factors matter most
+                overall?"</i>
             </div>
             """, unsafe_allow_html=True)
 
@@ -1329,9 +1341,13 @@ if predict_btn:
             st.pyplot(fig_s)
             plt.close()
 
-            st.markdown("### 📋 What Each Factor Means — Plain English:")
+            st.markdown("""
+            <p style='color:#1b5e20; font-size:0.95rem; font-weight:700;
+                      margin:1rem 0 0.5rem 0'>
+                📋 Factor-by-factor breakdown — ranked by strength of influence:
+            </p>
+            """, unsafe_allow_html=True)
 
-            # Emoji icons per feature for visual clarity
             feat_icons = {
                 "Crop Type":   "🌾",
                 "Country":     "🗺️",
@@ -1341,32 +1357,44 @@ if predict_btn:
                 "Temperature": "🌡️",
             }
 
-            for feat, val in sorted(
-                    zip(feature_names, shap_vals[0]),
-                    key=lambda x: abs(x[1]), reverse=True):
+            # Render in 2-column grid
+            shap_sorted = sorted(
+                zip(feature_names, shap_vals[0]),
+                key=lambda x: abs(x[1]), reverse=True)
 
-                meaning  = get_shap_meaning(feat, val)
-                css      = "shap-positive" if val > 0 else "shap-negative"
-                icon     = "✅" if val > 0 else "❌"
-                dirn     = "increases" if val > 0 else "decreases"
-                arrow    = "↑" if val > 0 else "↓"
-                femoji   = feat_icons.get(feat, "📊")
-                tons_val = abs(val) / 10000
-
-                # Rank label — biggest factor gets a crown
-                st.markdown(f"""
-                <div class='{css}'>
-                    <div class='shap-feature-name'>
-                        {icon} {femoji} {feat}
-                    </div>
-                    <div class='shap-value'>
-                        {arrow} This factor {dirn} your yield by
-                        <b>{abs(val):.0f} hg/ha
-                        ({tons_val:.3f} tons/ha)</b>
-                    </div>
-                    <div class='shap-meaning'>💡 {meaning}</div>
-                </div>
-                """, unsafe_allow_html=True)
+            for i in range(0, len(shap_sorted), 2):
+                row_cols = st.columns(2)
+                for j, col in enumerate(row_cols):
+                    if i + j >= len(shap_sorted):
+                        break
+                    feat, val = shap_sorted[i + j]
+                    meaning   = get_shap_meaning(feat, val)
+                    css       = "shap-positive" if val > 0 else "shap-negative"
+                    status    = "Positive Factor" if val > 0 else "Negative Factor"
+                    arrow     = "▲" if val > 0 else "▼"
+                    femoji    = feat_icons.get(feat, "📊")
+                    tons_val  = abs(val) / 10000
+                    rank      = i + j + 1
+                    with col:
+                        st.markdown(f"""
+                        <div class='{css}' style='height:100%'>
+                            <div class='shap-feature-name'>
+                                #{rank} &nbsp; {femoji} {feat}
+                                &nbsp;
+                                <span style='font-size:0.75rem;
+                                    font-weight:600; opacity:0.8'>
+                                    ({status})
+                                </span>
+                            </div>
+                            <div class='shap-value'>
+                                {arrow} Impact: {abs(val):.0f} hg/ha
+                                &nbsp;=&nbsp; {tons_val:.3f} tons/ha
+                            </div>
+                            <div class='shap-meaning'>
+                                {meaning}
+                            </div>
+                        </div>
+                        """, unsafe_allow_html=True)
 
             st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
 
@@ -1376,11 +1404,25 @@ if predict_btn:
                 unsafe_allow_html=True)
             st.markdown("""
             <div class='info-card'>
-                <div class='info-card-title'>What is LIME?</div>
-                <b>LIME</b> explains <b>YOUR specific prediction</b>.
-                SHAP = global (all farmers).
-                LIME = local (your farm only).
-                Together = complete <b>Explainable AI (XAI)</b>.
+                <div class='info-card-title'>
+                    XAI Method 2 of 2 — LIME (Local / Individual Explanation)
+                </div>
+                <b>LIME</b> (Local Interpretable Model-agnostic Explanations)
+                explains <b>this specific prediction only</b> — not the
+                overall model. It creates a simplified local approximation
+                around your exact input values to identify which factors
+                pushed your particular yield estimate up or down.<br><br>
+                <b>Why SHAP and LIME give different numbers — and why that
+                is correct:</b> SHAP measures a feature's average influence
+                across the entire dataset (28,242 records). LIME measures its
+                influence specifically for your farm's conditions today.
+                A factor like rainfall may be moderately important overall
+                (SHAP) but critically important or unimportant for your
+                specific city and crop combination (LIME). Using both
+                together provides <b>complete XAI coverage</b> — global
+                model transparency and individual prediction transparency —
+                which is the standard dual-XAI approach in research
+                (Ribeiro et al. 2016; Lundberg &amp; Lee 2017).
             </div>
             """, unsafe_allow_html=True)
 
@@ -1389,6 +1431,7 @@ if predict_btn:
                     data_row=input_data[0],
                     predict_fn=model.predict, num_features=6)
 
+            # LIME chart
             fig_l = lime_exp.as_pyplot_figure()
             fig_l.patch.set_facecolor('#f9fbe7')
             for ax_l in fig_l.get_axes():
@@ -1401,192 +1444,202 @@ if predict_btn:
                 ax_l.spines['top'].set_visible(False)
                 ax_l.spines['right'].set_visible(False)
             fig_l.suptitle(
-                f"XAI (LIME): Your Personal Explanation\n"
-                f"{city}  |  {crop}  |  {year}",
+                f"XAI — LIME: Individual Prediction Breakdown"
+                f"\n{city}  |  {crop}  |  {year}",
                 fontsize=12, fontweight='bold', color='#1b5e20')
             plt.tight_layout(pad=1.5)
             st.pyplot(fig_l)
             plt.close()
 
             # ── LIME Plain English Translator ──
-            # LIME returns raw conditions like "Crop Type <= 3.00"
-            # or "591.00 < Rainfall <= 1083.00" which are confusing.
-            # This translator converts them into farmer-friendly language.
+            # LIME returns raw numerical conditions e.g. "Crop Type <= 3.00"
+            # or "591.00 < Rainfall <= 1083.00". These are internal model
+            # encodings — not meaningful to a farmer or a reader.
+            # This function maps them to clear, accurate English sentences.
 
-            def translate_lime_feature(raw_feature, importance, crop,
-                                       weather, soil):
-                """
-                Converts LIME's raw feature condition strings into
-                plain English sentences a farmer can understand.
+            def translate_lime_feature(raw_feature, importance,
+                                       crop, weather, soil, year):
+                feat  = raw_feature.lower()
+                imp   = abs(importance)
+                tons  = imp / 10000
+                pos   = importance > 0
+                arrow = "&#9650;" if pos else "&#9660;"   # ▲ ▼  HTML-safe
+                color_arrow = "#2e7d32" if pos else "#c62828"
+                region = soil.get("region", "your region")
+                t      = weather.get("temperature", 25)
+                rf     = weather.get("rainfall", 0)
 
-                LIME internally encodes:
-                  - Crop Type as numbers  (0–9)
-                  - Country as numbers    (0–100+)
-                  - Year as actual year
-                  - Rainfall as mm/year
-                  - Pesticides as tonnes
-                  - Temperature as °C
-                """
-                feat = raw_feature.lower()
-                imp  = abs(importance)
-                tons = imp / 10000
-                direction = "increases" if importance > 0 else "decreases"
-                arrow     = "↑" if importance > 0 else "↓"
-                tip_pos   = "✅ This is currently working in your favour."
-                tip_neg   = "⚠️ Improving this could boost your yield."
-
-                # ── Crop Type ──
+                # Each block returns: (label, impact_html, explanation)
                 if "crop" in feat:
-                    name = f"**{crop}** (your selected crop)"
-                    if importance > 0:
-                        return (
-                            f"🌾 **Crop Type — {crop}**",
-                            f"{arrow} {direction.capitalize()} yield by "
-                            f"**{imp:.0f} hg/ha ({tons:.2f} tons/ha)**",
-                            f"{tip_pos} {crop} is well suited to the current "
-                            f"weather and regional conditions. "
-                            f"It is the biggest positive factor in your prediction."
+                    label = f"Crop Type — {crop}"
+                    icon  = "🌾"
+                    if pos:
+                        expl = (
+                            f"{crop} is well matched to the current weather "
+                            f"and regional conditions. The model confirms this "
+                            f"crop selection as the single strongest positive "
+                            f"driver of your predicted yield."
                         )
                     else:
-                        return (
-                            f"🌾 **Crop Type — {crop}**",
-                            f"{arrow} {direction.capitalize()} yield by "
-                            f"**{imp:.0f} hg/ha ({tons:.2f} tons/ha)**",
-                            f"{tip_neg} {crop} may not be ideal for current "
-                            f"conditions. Consider a different variety next season."
+                        expl = (
+                            f"{crop} is not ideally suited to the current "
+                            f"conditions according to historical FAO patterns. "
+                            f"Switching to a more regionally appropriate variety "
+                            f"could recover this yield loss next season."
                         )
 
-                # ── Pesticides ──
                 elif "pesticide" in feat or "pestic" in feat:
-                    level = weather.get("humidity", 60)
-                    if importance > 0:
-                        return (
-                            f"🐛 **Pesticide / Crop Protection Level**",
-                            f"{arrow} {direction.capitalize()} yield by "
-                            f"**{imp:.0f} hg/ha ({tons:.2f} tons/ha)**",
-                            f"{tip_pos} Your current pest control level is "
-                            f"effectively protecting the crop from damage."
+                    label = "Pest Control and Crop Protection"
+                    icon  = "🐛"
+                    if pos:
+                        expl = (
+                            "The current level of crop protection is effectively "
+                            "preventing pest-related yield loss. This is "
+                            "contributing positively to the prediction."
                         )
                     else:
-                        return (
-                            f"🐛 **Pesticide / Crop Protection Level**",
-                            f"{arrow} {direction.capitalize()} yield by "
-                            f"**{imp:.0f} hg/ha ({tons:.2f} tons/ha)**",
-                            f"{tip_neg} Pest control is below the optimal level. "
-                            f"Increasing protection can recover this yield loss. "
-                            f"See the Pest Control Optimization plan above."
+                        expl = (
+                            "Crop protection is below the level the model "
+                            "associates with high yields for this crop. "
+                            "Increasing pest management — as recommended in "
+                            "the Optimization Plan above — can recover "
+                            "this loss."
                         )
 
-                # ── Temperature ──
                 elif "temp" in feat:
-                    t = weather.get("temperature", 25)
-                    if importance > 0:
-                        return (
-                            f"🌡️ **Temperature — {t:.1f}°C (Live)**",
-                            f"{arrow} {direction.capitalize()} yield by "
-                            f"**{imp:.0f} hg/ha ({tons:.2f} tons/ha)**",
-                            f"{tip_pos} Today's temperature is within the "
-                            f"comfortable range for {crop}."
+                    label = f"Air Temperature — {t:.1f}°C (Live)"
+                    icon  = "🌡️"
+                    if pos:
+                        expl = (
+                            f"The current temperature of {t:.1f}°C falls within "
+                            f"the preferred growing range for {crop}. "
+                            f"No thermal stress is affecting the prediction."
                         )
                     else:
-                        return (
-                            f"🌡️ **Temperature — {t:.1f}°C (Live)**",
-                            f"{arrow} {direction.capitalize()} yield by "
-                            f"**{imp:.0f} hg/ha ({tons:.2f} tons/ha)**",
-                            f"{tip_neg} Temperature is above the optimal range "
-                            f"for {crop}. Use shade nets and increase irrigation "
-                            f"during peak afternoon heat. "
-                            f"(Weather cannot be controlled, only managed.)"
+                        expl = (
+                            f"At {t:.1f}°C, the temperature exceeds the optimal "
+                            f"threshold for {crop}. Thermal stress reduces "
+                            f"photosynthesis efficiency and grain filling. "
+                            f"Install shade nets and increase morning irrigation "
+                            f"to partially offset this effect. Note: temperature "
+                            f"itself cannot be controlled, only managed."
                         )
 
-                # ── Rainfall / Irrigation ──
                 elif "rain" in feat or "rainfall" in feat:
-                    rf = weather.get("rainfall", 0)
-                    if importance > 0:
-                        return (
-                            f"🌧️ **Rainfall / Irrigation**",
-                            f"{arrow} {direction.capitalize()} yield by "
-                            f"**{imp:.0f} hg/ha ({tons:.2f} tons/ha)**",
-                            f"{tip_pos} Water availability is in a good range "
-                            f"for {crop} growth. "
-                            f"Today's rainfall: {rf:.1f}mm."
+                    label = "Rainfall and Irrigation Level"
+                    icon  = "🌧️"
+                    if pos:
+                        expl = (
+                            f"Current water availability is within the optimal "
+                            f"range for {crop}. Today's measured rainfall is "
+                            f"{rf:.1f} mm. Soil moisture is adequate for "
+                            f"normal crop development."
                         )
                     else:
-                        return (
-                            f"🌧️ **Rainfall / Irrigation**",
-                            f"{arrow} {direction.capitalize()} yield by "
-                            f"**{imp:.0f} hg/ha ({tons:.2f} tons/ha)**",
-                            f"{tip_neg} Water level is not in the optimal range. "
-                            f"Today's rainfall is {rf:.1f}mm. "
-                            f"Adjust irrigation as per the optimization plan above."
+                        expl = (
+                            f"Water availability is outside the optimal range "
+                            f"for {crop}. Today's rainfall is {rf:.1f} mm, "
+                            f"which may indicate water stress or waterlogging. "
+                            f"Follow the irrigation target in the Optimization "
+                            f"Plan to correct this."
                         )
 
-                # ── Country / Region ──
                 elif "country" in feat:
-                    region = soil.get("region", "your region")
-                    if importance > 0:
-                        return (
-                            f"🗺️ **Regional Conditions — {region}**",
-                            f"{arrow} {direction.capitalize()} yield by "
-                            f"**{imp:.0f} hg/ha ({tons:.2f} tons/ha)**",
-                            f"{tip_pos} Agricultural conditions and farming "
-                            f"practices in {region} are historically favourable "
-                            f"for {crop}."
+                    label = f"Regional Agricultural Conditions — {region}"
+                    icon  = "🗺️"
+                    if pos:
+                        expl = (
+                            f"Historical FAO yield data shows that {region} "
+                            f"has strong productivity for {crop}. Soil type, "
+                            f"farming practices, and infrastructure in this "
+                            f"region support above-average yields."
                         )
                     else:
-                        return (
-                            f"🗺️ **Regional Conditions — {region}**",
-                            f"{arrow} {direction.capitalize()} yield by "
-                            f"**{imp:.0f} hg/ha ({tons:.2f} tons/ha)**",
-                            f"{tip_neg} This region has historically shown "
-                            f"lower yields for {crop}. "
-                            f"Follow local KVK advisory for region-specific tips."
+                        expl = (
+                            f"Historical FAO data shows that {region} has "
+                            f"recorded below-average yields for {crop} compared "
+                            f"to other regions. Consult the local KVK office "
+                            f"for region-specific variety recommendations."
                         )
 
-                # ── Year ──
                 elif "year" in feat:
-                    if importance > 0:
-                        return (
-                            f"📅 **Year — {year}**",
-                            f"{arrow} {direction.capitalize()} yield by "
-                            f"**{imp:.0f} hg/ha ({tons:.2f} tons/ha)**",
-                            f"{tip_pos} Modern agricultural technology and "
-                            f"improved practices in {year} contribute positively. "
-                            f"(Smallest factor — minor influence.)"
+                    label = f"Year — {year}"
+                    icon  = "📅"
+                    if pos:
+                        expl = (
+                            f"The year {year} reflects improved agricultural "
+                            f"inputs, better seed varieties, and technology "
+                            f"adoption compared to earlier periods in the "
+                            f"training data. This contributes a small but "
+                            f"positive trend effect to the prediction."
                         )
                     else:
-                        return (
-                            f"📅 **Year — {year}**",
-                            f"{arrow} {direction.capitalize()} yield by "
-                            f"**{imp:.0f} hg/ha ({tons:.2f} tons/ha)**",
-                            f"Historical yield patterns show a slight reduction "
-                            f"for this period. Minor influence on prediction."
+                        expl = (
+                            f"Year {year} shows a marginal negative trend "
+                            f"relative to the training data baseline. "
+                            f"This is a minor influence on the overall prediction."
                         )
 
-                # ── Fallback ──
                 else:
-                    return (
-                        f"📊 **{raw_feature}**",
-                        f"{arrow} {direction.capitalize()} yield by "
-                        f"**{imp:.0f} hg/ha ({tons:.2f} tons/ha)**",
-                        tip_pos if importance > 0 else tip_neg
+                    label = raw_feature
+                    icon  = "📊"
+                    expl  = (
+                        "This factor has a measurable influence on the "
+                        "predicted yield based on the model's training data."
                     )
 
-            # ── Display translated LIME cards ──
-            lc1, lc2 = st.columns(2)
-            for i, (raw_feature, importance) in enumerate(
-                    lime_exp.as_list()):
-                title, value_line, meaning = translate_lime_feature(
-                    raw_feature, importance, crop, weather, soil)
-                css   = "shap-positive" if importance > 0 else "shap-negative"
-                with lc1 if i % 2 == 0 else lc2:
-                    st.markdown(f"""
-                    <div class='{css}'>
-                        <div class='shap-feature-name'>{title}</div>
-                        <div class='shap-value'>{value_line}</div>
-                        <div class='shap-meaning'>💡 {meaning}</div>
-                    </div>
-                    """, unsafe_allow_html=True)
+                impact_html = (
+                    f"<span style='color:{color_arrow}; font-size:1.05rem;"
+                    f" font-weight:900'>"
+                    f"{arrow} Yield impact: {imp:.0f} hg/ha "
+                    f"&nbsp;=&nbsp; {tons:.3f} tons/ha</span>"
+                )
+                return label, icon, impact_html, expl
+
+            # ── Render LIME cards in clean 2-column grid ──
+            st.markdown("""
+            <p style='color:#1b5e20; font-size:0.95rem; font-weight:700;
+                      margin:1rem 0 0.5rem 0'>
+                Factor-by-factor explanation for your specific prediction:
+            </p>
+            """, unsafe_allow_html=True)
+
+            lime_list = lime_exp.as_list()
+            for i in range(0, len(lime_list), 2):
+                row_cols = st.columns(2)
+                for j, col in enumerate(row_cols):
+                    if i + j >= len(lime_list):
+                        break
+                    raw_feature, importance = lime_list[i + j]
+                    label, icon, impact_html, expl = \
+                        translate_lime_feature(
+                            raw_feature, importance,
+                            crop, weather, soil, year)
+                    css    = "shap-positive" if importance > 0 \
+                             else "shap-negative"
+                    status = "Positive contributor" if importance > 0 \
+                             else "Yield-limiting factor"
+                    rank   = i + j + 1
+                    with col:
+                        st.markdown(f"""
+                        <div class='{css}' style='height:100%;
+                                    margin-bottom:0.6rem'>
+                            <div class='shap-feature-name'>
+                                #{rank} &nbsp; {icon} &nbsp; {label}
+                                <br>
+                                <span style='font-size:0.72rem;
+                                    font-weight:600; opacity:0.75'>
+                                    {status}
+                                </span>
+                            </div>
+                            <div style='margin:0.4rem 0'>
+                                {impact_html}
+                            </div>
+                            <div class='shap-meaning'>
+                                {expl}
+                            </div>
+                        </div>
+                        """, unsafe_allow_html=True)
 
             # ── COMMENTED OUT: General Recommendations ──
             # Reason: Fully covered by the 4-Parameter Optimization section above.
