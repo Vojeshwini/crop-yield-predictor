@@ -1893,7 +1893,7 @@ if predict_btn:
             st.download_button(
                 label=lang["download"],
                 data=pdf_buf,
-                file_name=f"CropAI_{city}_{crop}_{year}.pdf",
+                file_name=f"CropAI_{city}_{crop}_{year}.pdf" ,
                 mime="application/pdf",
                 use_container_width=True)
             st.success("✅ PDF ready! Click the blue button above to download.")
