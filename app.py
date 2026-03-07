@@ -370,11 +370,29 @@ def optimize_yield(model, input_data, current_prediction, soil_ph):
 # ─────────────────────────────────────────────────────
 # HELPER FUNCTIONS
 # ─────────────────────────────────────────────────────
+# Open-Meteo geocoding uses official city names — map common aliases
+CITY_ALIASES = {
+    "Bangalore":        "Bengaluru",
+    "Bombay":           "Mumbai",
+    "Calcutta":         "Kolkata",
+    "Madras":           "Chennai",
+    "Mysore":           "Mysuru",
+    "Mangalore":        "Mangaluru",
+    "Pondicherry":      "Puducherry",
+    "Vizag":            "Visakhapatnam",
+    "Trivandrum":       "Thiruvananthapuram",
+    "Cochin":           "Kochi",
+    "Simla":            "Shimla",
+    "Benares":          "Varanasi",
+}
+
 def get_weather(city_name):
+    # Resolve alias so Open-Meteo geocoding finds the city correctly
+    api_city = CITY_ALIASES.get(city_name, city_name)
     try:
         geo = requests.get(
             "https://geocoding-api.open-meteo.com/v1/search",
-            params={"name": city_name, "count": 1},
+            params={"name": api_city, "count": 1},
             timeout=10).json()
         if "results" not in geo:
             return None
@@ -681,7 +699,7 @@ def generate_pdf(city, crop, year, weather, soil,
 # ─────────────────────────────────────────────────────
 CITIES = [
     "--- Select City ---",
-    "🏙️ Bangalore", "🏙️ Mumbai", "🏙️ Delhi",
+    "🏙️ Bengaluru", "🏙️ Mumbai", "🏙️ Delhi",
     "🏙️ Chennai", "🏙️ Hyderabad", "🏙️ Kolkata",
     "🏙️ Pune", "🏙️ Ahmedabad", "🏙️ Jaipur",
     "🏙️ Lucknow", "🏙️ Nagpur", "🏙️ Visakhapatnam",
