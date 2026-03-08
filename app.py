@@ -434,24 +434,31 @@ CITY_COORDS = {
 def get_weather(city_name):
     # Resolve alias so Open-Meteo geocoding finds the city correctly
     api_city = CITY_ALIASES.get(city_name, city_name)
+
+    # ── Step 1: Get coordinates (API first, then hardcoded fallback) ──
+    lat, lon, country = None, None, "India"
     try:
-        # Try geocoding API first
-        lat, lon, country = None, None, "India"
         geo = requests.get(
             "https://geocoding-api.open-meteo.com/v1/search",
             params={"name": api_city, "count": 1},
             timeout=8).json()
         if "results" in geo and len(geo["results"]) > 0:
-            loc     = geo["results"][0]
+            loc      = geo["results"][0]
             lat, lon = loc["latitude"], loc["longitude"]
             country  = loc.get("country", "India")
+    except:
+        pass  # geocoding failed — will use hardcoded below
+
+    # If geocoding didn't give coordinates, use hardcoded
+    if lat is None:
+        fallback = CITY_COORDS.get(api_city) or CITY_COORDS.get(city_name)
+        if fallback:
+            lat, lon, country = fallback
         else:
-            # Geocoding API failed — use hardcoded coordinates
-            fallback = CITY_COORDS.get(api_city) or CITY_COORDS.get(city_name)
-            if fallback:
-                lat, lon, country = fallback
-            else:
-                return None
+            return None  # city completely unknown
+
+    # ── Step 2: Get live weather (API first, then seasonal fallback) ──
+    try:
         wr = requests.get(
             "https://api.open-meteo.com/v1/forecast",
             params={
@@ -473,10 +480,30 @@ def get_weather(city_name):
             "longitude":   lon,
             "temperature": temp,
             "rainfall":    d["precipitation_sum"][0],
-            "humidity":    d["relative_humidity_2m_max"][0]
+            "humidity":    d["relative_humidity_2m_max"][0],
+            "data_source": "live"
         }
     except:
-        return None
+        # ── Weather API also down — use seasonal estimates by latitude ──
+        # Estimates based on Indian climate averages (March baseline)
+        if lat > 28:        # North India (Delhi, Chandigarh, Amritsar...)
+            temp, rain, hum = 28.0, 0.5, 45
+        elif lat > 22:      # Central India (Mumbai, Pune, Nagpur...)
+            temp, rain, hum = 32.0, 0.2, 55
+        elif lat > 15:      # South-Central (Hyderabad, Bengaluru...)
+            temp, rain, hum = 30.0, 0.3, 60
+        else:               # Deep South / Coastal (Chennai, Kochi, TVM...)
+            temp, rain, hum = 33.0, 1.0, 70
+        return {
+            "city":        city_name,
+            "country":     country,
+            "latitude":    lat,
+            "longitude":   lon,
+            "temperature": temp,
+            "rainfall":    rain,
+            "humidity":    hum,
+            "data_source": "estimated"  # flag so we can show a notice
+        }
 
 def get_soil(lat):
     if lat > 25:
@@ -1211,6 +1238,10 @@ if predict_btn:
             st.error(f"❌ Could not find '{city}'. Please try another city.")
         else:
             soil = get_soil(weather["latitude"])
+
+            # Show notice if weather API was down and estimates were used
+            if weather.get("data_source") == "estimated":
+                st.warning("⚠️ Live weather API is temporarily unavailable. Using seasonal climate estimates for your region. Predictions are still fully functional.")
 
             st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
 
