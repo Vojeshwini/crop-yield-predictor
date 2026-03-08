@@ -435,7 +435,7 @@ CITY_COORDS = {
 # YOUR OPENWEATHERMAP API KEY — paste your key below
 # Get free key at: openweathermap.org → Sign Up → API Keys
 # ─────────────────────────────────────────────────────
-OWM_API_KEY = "YOUR_API_KEY_HERE"   # ← paste your key here
+OWM_API_KEY = "f1e355f252891323f6b2e729a03a45d7"
 
 def get_weather(city_name):
     api_city = CITY_ALIASES.get(city_name, city_name)
