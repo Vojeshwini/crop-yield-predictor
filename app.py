@@ -431,68 +431,73 @@ CITY_COORDS = {
     "Shimla":               (31.1048,  77.1734, "India"),
 }
 
+# ─────────────────────────────────────────────────────
+# YOUR OPENWEATHERMAP API KEY — paste your key below
+# Get free key at: openweathermap.org → Sign Up → API Keys
+# ─────────────────────────────────────────────────────
+OWM_API_KEY = "YOUR_API_KEY_HERE"   # ← paste your key here
+
 def get_weather(city_name):
-    # Resolve alias so Open-Meteo geocoding finds the city correctly
     api_city = CITY_ALIASES.get(city_name, city_name)
 
-    # ── Step 1: Get coordinates (API first, then hardcoded fallback) ──
+    # ── Step 1: Get coordinates from hardcoded dict (instant, no API) ──
     lat, lon, country = None, None, "India"
-    try:
-        geo = requests.get(
-            "https://geocoding-api.open-meteo.com/v1/search",
-            params={"name": api_city, "count": 1},
-            timeout=8).json()
-        if "results" in geo and len(geo["results"]) > 0:
-            loc      = geo["results"][0]
-            lat, lon = loc["latitude"], loc["longitude"]
-            country  = loc.get("country", "India")
-    except:
-        pass  # geocoding failed — will use hardcoded below
+    fallback = CITY_COORDS.get(api_city) or CITY_COORDS.get(city_name)
+    if fallback:
+        lat, lon, country = fallback
+    else:
+        # Unknown city — try OWM geocoding
+        try:
+            geo = requests.get(
+                "http://api.openweathermap.org/geo/1.0/direct",
+                params={"q": api_city, "limit": 1,
+                        "appid": OWM_API_KEY},
+                timeout=8).json()
+            if geo and len(geo) > 0:
+                lat     = geo[0]["lat"]
+                lon     = geo[0]["lon"]
+                country = geo[0].get("country", "IN")
+        except:
+            pass
+        if lat is None:
+            return None
 
-    # If geocoding didn't give coordinates, use hardcoded
-    if lat is None:
-        fallback = CITY_COORDS.get(api_city) or CITY_COORDS.get(city_name)
-        if fallback:
-            lat, lon, country = fallback
-        else:
-            return None  # city completely unknown
-
-    # ── Step 2: Get live weather (API first, then seasonal fallback) ──
+    # ── Step 2: OpenWeatherMap current weather (PRIMARY — very reliable) ──
     try:
         wr = requests.get(
-            "https://api.open-meteo.com/v1/forecast",
+            "https://api.openweathermap.org/data/2.5/weather",
             params={
-                "latitude": lat, "longitude": lon,
-                "daily": ["temperature_2m_max",
-                          "temperature_2m_min",
-                          "precipitation_sum",
-                          "relative_humidity_2m_max"],
-                "timezone":      "Asia/Kolkata",
-                "forecast_days": 1
+                "lat":   lat,
+                "lon":   lon,
+                "appid": OWM_API_KEY,
+                "units": "metric"       # Celsius
             }, timeout=10).json()
-        d    = wr["daily"]
-        temp = (d["temperature_2m_max"][0] +
-                d["temperature_2m_min"][0]) / 2
+
+        temp     = wr["main"]["temp"]
+        humidity = wr["main"]["humidity"]
+        # OWM gives rain in last 1h (mm) — scale to daily estimate
+        rain_1h  = wr.get("rain", {}).get("1h", 0.0)
+        rainfall = rain_1h * 8   # rough daily estimate
+
         return {
             "city":        city_name,
             "country":     country,
             "latitude":    lat,
             "longitude":   lon,
             "temperature": temp,
-            "rainfall":    d["precipitation_sum"][0],
-            "humidity":    d["relative_humidity_2m_max"][0],
+            "rainfall":    rainfall,
+            "humidity":    humidity,
             "data_source": "live"
         }
     except:
-        # ── Weather API also down — use seasonal estimates by latitude ──
-        # Estimates based on Indian climate averages (March baseline)
-        if lat > 28:        # North India (Delhi, Chandigarh, Amritsar...)
+        # ── Step 3: Both APIs down — seasonal estimate (last resort) ──
+        if lat > 28:
             temp, rain, hum = 28.0, 0.5, 45
-        elif lat > 22:      # Central India (Mumbai, Pune, Nagpur...)
+        elif lat > 22:
             temp, rain, hum = 32.0, 0.2, 55
-        elif lat > 15:      # South-Central (Hyderabad, Bengaluru...)
+        elif lat > 15:
             temp, rain, hum = 30.0, 0.3, 60
-        else:               # Deep South / Coastal (Chennai, Kochi, TVM...)
+        else:
             temp, rain, hum = 33.0, 1.0, 70
         return {
             "city":        city_name,
@@ -502,7 +507,7 @@ def get_weather(city_name):
             "temperature": temp,
             "rainfall":    rain,
             "humidity":    hum,
-            "data_source": "estimated"  # flag so we can show a notice
+            "data_source": "estimated"
         }
 
 def get_soil(lat):
