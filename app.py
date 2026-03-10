@@ -278,17 +278,17 @@ def load_models():
 # Tests 256 combinations (4 params × 4 levels each)
 # ─────────────────────────────────────────────────────
 def optimize_yield(model, input_data, current_prediction, soil_ph):
-    # """
-    # Full Counterfactual Optimization Engine
-    # Optimizes all 4 controllable parameters:
-    #   1. Irrigation (rainfall mm/year)
-    #   2. Pesticides (tonnes) — pest control proxy
-    #   3. Fertilizer effect (via pH adjustment mapping)
-    #   4. Irrigation frequency (seasonal distribution)
+    """
+    Full Counterfactual Optimization Engine
+    Optimizes all 4 controllable parameters:
+      1. Irrigation (rainfall mm/year)
+      2. Pesticides (tonnes) — pest control proxy
+      3. Fertilizer effect (via pH adjustment mapping)
+      4. Irrigation frequency (seasonal distribution)
 
-    # Tests 256 combinations → finds best yield
-    # Covers ALL problem statement optimization goals
-    # """
+    Tests 256 combinations → finds best yield
+    Covers ALL problem statement optimization goals
+    """
 
     best_yield    = current_prediction
     best_rain     = input_data[0][3]
