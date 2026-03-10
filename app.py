@@ -1938,8 +1938,6 @@ if predict_btn:
 st.markdown("""
 <div class='footer'>
     🌾 CropAI — AI Crop Yield Prediction & 4-Parameter Optimization
-     &nbsp;|&nbsp; Random Forest + SHAP + LIME + Counterfactual Optimizer
-    &nbsp;|&nbsp; Live Weather via Open-Meteo API
-    &nbsp;|&nbsp; IEEE Research Project
+     
 </div>
 """, unsafe_allow_html=True)
